@@ -1,0 +1,16 @@
+# Idea del Proyecto
+
+## Problema
+Detectar automáticamente si hay un diario en la puerta de la casa.
+
+## Solución
+Usar visión por computadora (OpenCV + NumPy) para analizar imágenes de puertas.
+
+
+## Fuentes de imágenes
+Imágenes cargadas desde URLs de la web simulando:
+- Puerta CON diario
+- Puerta SIN diario
+
+## Objetivo
+Determinar mediante detección de objetos si el diario está presente.
