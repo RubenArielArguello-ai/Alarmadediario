@@ -20,7 +20,7 @@ from typing import Tuple
 
 import cv2
 import numpy as np
-
+import requests
 
 DEFAULT_THRESHOLD = 30
 DEFAULT_MIN_AREA = 1500
@@ -175,33 +175,34 @@ def main() -> int:
         return 2
 
     source_name = os.path.basename(args.actual)
-    detectado, ruta_binaria, ruta_marcado, detecciones = detectar_objeto_nuevo(
+    detectado, ruta_binaria, ruta_marcado, _= detectar_objeto_nuevo(
         imagen_actual,
         fondo_gris,
         actual_gris,
         args.umbral,
         args.area_minima,
         args.salida,
-        save_crops=args.save_crops,
-        save_csv=args.save_csv,
-        source_image_name=source_name,
+        args.save_crops,
+        args.save_csv,
+        source_name
     )
 
     if detectado:
         logging.info("\n✅ Diario detectado.")
         logging.info("Imágenes guardadas: %s, %s", ruta_marcado, ruta_binaria)
-        if args.save_crops and detecciones:
-            logging.info("Crops guardados: %d", len([d for d in detecciones if d.get('crop')]))
-        if args.save_csv:
-            logging.info("CSV guardado: %s", os.path.join(args.salida, "detecciones.csv"))
-        return 0
+        try:
+            requests.post(
+                "http://localhost:5678/webhook-test/4388a0a2-d83e-4102-ba86-34c5660e8092",
+                json={"estado": "Diario detectado"}
+            )
+        except Exception as e:
+            logging.error("Error al enviar webhook a n8n: %s", str(e))
     else:
-        logging.info("\n❌ No se detectó nada. Prueba bajar --umbral o --area-minima.")
-        logging.info("Imágenes guardadas: %s, %s", ruta_marcado, ruta_binaria)
-        if args.save_csv:
-            logging.info("CSV guardado: %s", os.path.join(args.salida, "detecciones.csv"))
-        return 1
-
+        logging.info("\n❌ No se detectó ningún diario nuevo.")
+    logging.info("Imágenes guardadas: %s, %s", ruta_marcado, ruta_binaria)
+    if args.save_csv:
+        logging.info("CSV guardado: %s", os.path.join(args.salida, "detecciones.csv"))
+    #return 1
 
 if __name__ == "__main__":
     raise SystemExit(main())

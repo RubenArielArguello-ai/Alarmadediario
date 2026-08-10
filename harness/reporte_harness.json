@@ -1,0 +1,12 @@
+{
+    "total_procesadas": 1,
+    "exitosas": 1,
+    "fallidas": 0,
+    "detalles": [
+        {
+            "imagen": "resultado_marcado_20260809_212348.jpg",
+            "estado": "OK",
+            "resultado": "(False, 'capturas/resultado_binaria_20260810_144417.png', 'capturas/resultado_marcado_20260810_144417.jpg', [])"
+        }
+    ]
+}
