@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alarma de Diario — híbrido</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #171b22; --borde: #262c36;
+    --texto: #e6e9ef; --suave: #8b95a5; --acento: #4a9eff;
+    --color2: #22d3ee; --ok: #3fb950; --warn: #d29922; --alarma: #f85149;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--texto); min-height: 100vh; padding: 20px;
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1150px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+  h1 { font-size: 20px; font-weight: 600; }
+  .pill {
+    padding: 5px 12px; border-radius: 20px; font-size: 13px; font-weight: 600;
+    background: var(--borde); color: var(--suave); transition: .2s;
+  }
+  .pill.vigilando    { background: #14301c; color: var(--ok); }
+  .pill.movimiento   { background: #33280a; color: var(--warn); }
+  .pill.estabilizando{ background: #33280a; color: var(--warn); }
+  .pill.verificando  { background: #1c2c44; color: var(--acento); }
+  .pill.descartado   { background: #2b2f36; color: var(--suave); }
+  .pill.diario       { background: #3d1416; color: var(--alarma); }
+  .grid { display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .video-box {
+    position: relative; background: #000; border-radius: 10px; overflow: hidden;
+    border: 2px solid var(--borde); aspect-ratio: 16/9;
+  }
+  .video-box.alarma { border-color: var(--alarma); animation: pulso 1s infinite; }
+  @keyframes pulso { 50% { border-color: #7a1f22; } }
+  #video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #video { object-fit: contain; }
+  #overlay { cursor: crosshair; }
+  .placeholder {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    color: var(--suave); font-size: 14px;
+  }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--borde);
+    border-radius: 10px; padding: 16px; margin-bottom: 14px;
+  }
+  .panel h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--suave); margin-bottom: 12px; font-weight: 600;
+  }
+  .fila { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+  .fila span:first-child { color: var(--suave); }
+  .fila span:last-child { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  /* --- tarjetas de los dos validadores --- */
+  .val {
+    display: flex; align-items: center; gap: 10px; padding: 10px;
+    border: 1px solid var(--borde); border-radius: 8px; margin-bottom: 8px;
+    background: #0e1116;
+  }
+  .val .luz {
+    width: 12px; height: 12px; border-radius: 50%; flex: none;
+    background: #3a4553; transition: .2s;
+  }
+  .val.si  .luz { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .val.no  .luz { background: #444c59; }
+  .val .txt { flex: 1; min-width: 0; }
+  .val .tit { font-size: 12px; font-weight: 700; }
+  .val .sub { font-size: 11px; color: var(--suave); font-variant-numeric: tabular-nums; }
+  .val .voto { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 5px;
+               background: var(--borde); color: var(--suave); flex: none; }
+  .val.si .voto { background: #14301c; color: var(--ok); }
+  .val .tit.c1 { color: var(--color2); }
+  .val .tit.c2 { color: var(--ok); }
+  .veredicto {
+    font-size: 12px; color: var(--suave); margin-top: 4px;
+    border-left: 2px solid var(--borde); padding-left: 9px; min-height: 18px;
+  }
+
+  button {
+    width: 100%; padding: 9px; margin-top: 8px; border: 1px solid var(--borde);
+    background: #212832; color: var(--texto); border-radius: 7px;
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: .15s;
+  }
+  button:hover { background: #2b3441; border-color: #3a4553; }
+  button.primario { background: var(--acento); border-color: var(--acento); color: #061018; }
+  button.primario:hover { background: #6cb2ff; }
+
+  label { display: block; font-size: 12px; color: var(--suave); margin: 12px 0 5px; }
+  input[type=range] { width: 100%; accent-color: var(--acento); }
+  select, input[type=text], input[type=number], textarea {
+    width: 100%; padding: 7px; border-radius: 6px; border: 1px solid var(--borde);
+    background: #0e1116; color: var(--texto); font-size: 13px; font-family: inherit;
+  }
+  textarea { font-family: monospace; font-size: 12px; resize: vertical; }
+  .valor { float: right; color: var(--texto); font-variant-numeric: tabular-nums; }
+
+  .msg { font-size: 12px; color: var(--suave); margin-top: 10px; min-height: 18px; }
+  .banner {
+    display: none; background: #3d1416; border: 1px solid var(--alarma);
+    color: #ffb4b0; padding: 12px 16px; border-radius: 8px;
+    margin-bottom: 16px; font-weight: 600;
+  }
+  .banner.on { display: block; }
+  .leyenda { font-size: 11px; color: var(--suave); margin-top: 8px; }
+  .leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+               margin-right: 4px; vertical-align: -1px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Alarma de Diario</h1>
+    <span class="pill" id="pill">conectando…</span>
+    <span class="msg" id="modo-actual" style="margin:0"></span>
+  </header>
+
+  <div class="banner" id="banner">
+    <span id="banner-txt">Diario detectado</span> — <span id="banner-hora"></span>
+    <button style="width:auto;float:right;margin:-4px 0 0 0;padding:4px 12px"
+            onclick="silenciar()">Silenciar</button>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="video-box" id="video-box">
+        <img id="video" alt="">
+        <canvas id="overlay"></canvas>
+        <div class="placeholder" id="placeholder">Esperando cámara…</div>
+      </div>
+      <p class="msg" id="msg"></p>
+      <p class="leyenda">
+        <i style="background:#22d3ee"></i>lo que vio la diferencia de color &nbsp;
+        <i style="background:#3fb950"></i>lo que el modelo reconoció como diario &nbsp;
+        <i style="background:#d29922"></i>detección débil del modelo
+      </p>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Los dos validadores</h2>
+
+        <div class="val no" id="val-color">
+          <span class="luz"></span>
+          <span class="txt">
+            <span class="tit c1">1 · Color en la alfombra</span><br>
+            <span class="sub" id="sub-color">esperando…</span>
+          </span>
+          <span class="voto" id="voto-color">—</span>
+        </div>
+
+        <div class="val no" id="val-modelo">
+          <span class="luz"></span>
+          <span class="txt">
+            <span class="tit c2">2 · OWLv2 · ¿es un diario?</span><br>
+            <span class="sub" id="sub-modelo">esperando…</span>
+          </span>
+          <span class="voto" id="voto-modelo">—</span>
+        </div>
+
+        <p class="veredicto" id="veredicto">—</p>
+      </div>
+
+      <div class="panel">
+        <h2>Cómo se combinan</h2>
+        <select id="fusion" onchange="cambiarFusion()">
+          <option value="cascada">Cascada — el color filtra, el modelo decide</option>
+          <option value="and">AND — los dos tienen que decir que sí</option>
+          <option value="or">OR — con que uno diga que sí, alcanza</option>
+          <option value="ponderado">Ponderado — promedio de los dos scores</option>
+          <option value="solo_color">Solo color — sin modelo (proyecto original)</option>
+          <option value="solo_modelo">Solo modelo — sin validación de color</option>
+        </select>
+        <p class="msg" id="msg-fusion">
+          En cascada el modelo solo corre cuando el color vio algo nuevo. Es lo
+          más barato y lo que menos falsos positivos da.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>Medidas en vivo</h2>
+        <div class="fila"><span>Movimiento</span><span id="v-mov">—</span></div>
+        <div class="fila"><span>Zona cambiada</span><span id="v-fondo">—</span></div>
+        <div class="fila"><span>ΔE de color</span><span id="v-delta">—</span></div>
+        <div class="fila"><span>¿Parece papel?</span><span id="v-papel">—</span></div>
+        <div class="fila"><span>Confianza modelo</span><span id="v-conf">—</span></div>
+        <div class="fila"><span>Score final</span><span id="v-score">—</span></div>
+        <div class="fila"><span>Confirmaciones</span><span id="v-confirm">—</span></div>
+        <div class="fila"><span>Modelo</span><span id="v-infer">en espera</span></div>
+      </div>
+
+      <div class="panel">
+        <h2>Zona a vigilar (la alfombra)</h2>
+        <button id="btn-roi" onclick="toggleRoi()">Dibujar zona</button>
+        <button onclick="limpiarRoi()">Usar toda la imagen</button>
+        <button onclick="recalibrar()">Recalibrar alfombra vacía</button>
+        <p class="msg" id="msg-roi">
+          Marcá las esquinas de la alfombra. Recalibrá cada vez que muevas la cámara.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>Validador 1 · color</h2>
+        <label>ΔE mínimo <span class="valor" id="l-de">16</span></label>
+        <input type="range" id="s-de" min="6" max="40" step="1" value="16">
+        <label>Área mínima (px) <span class="valor" id="l-area">1500</span></label>
+        <input type="range" id="s-area" min="200" max="10000" step="100" value="1500">
+        <label>Umbral "parece papel" <span class="valor" id="l-papel">0.35</span></label>
+        <input type="range" id="s-papel" min="0" max="0.9" step="0.01" value="0.35">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
+          <input type="checkbox" id="sombras" checked style="width:auto">
+          Ignorar sombras
+        </label>
+        <button class="primario" onclick="guardarColor()">Aplicar</button>
+        <p class="msg" id="msg-color"></p>
+      </div>
+
+      <div class="panel">
+        <h2>Validador 2 · modelo</h2>
+        <label>Confianza mínima <span class="valor" id="l-conf">0.37</span></label>
+        <input type="range" id="s-conf" min="0.02" max="0.95" step="0.01" value="0.37">
+        <p class="msg" id="aviso-conf" style="margin:4px 0 0"></p>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
+          <input type="checkbox" id="debiles" style="width:auto"> Mostrar detecciones débiles
+        </label>
+        <label>Umbral de movimiento <span class="valor" id="l-mov">0.02</span></label>
+        <input type="range" id="s-mov" min="0.005" max="0.15" step="0.005" value="0.02">
+        <label>Segundos de estabilidad <span class="valor" id="l-est">3</span></label>
+        <input type="range" id="s-est" min="1" max="15" step="1" value="3">
+        <button class="primario" onclick="guardarAjustes()">Aplicar</button>
+      </div>
+
+      <div class="panel">
+        <h2>Qué busca el modelo</h2>
+        <label>Nombre para la alarma</label>
+        <input type="text" id="obj-nombre" value="diario">
+        <label>Descripciones en inglés (una por línea)</label>
+        <textarea id="obj-prompts" rows="3">a rolled newspaper
+a newspaper
+a folded newspaper</textarea>
+        <button class="primario" onclick="guardarObjetivo()">Cambiar objetivo</button>
+        <button onclick="preset('diario')">Preset diario</button>
+        <button onclick="preset('anteojos')">Preset anteojos</button>
+        <p class="msg" id="msg-obj"></p>
+      </div>
+
+      <div class="panel">
+        <h2>Velocidad del modelo</h2>
+        <label>Resolución de entrada</label>
+        <select id="res" onchange="cambiarRes()">
+          <option value="960">960 — máxima precisión, muy lenta</option>
+          <option value="768">768 — precisa, lenta</option>
+          <option value="640" selected>640 — equilibrada</option>
+          <option value="480">480 — rápida</option>
+          <option value="320">320 — muy rápida, menos confiable</option>
+        </select>
+        <p class="msg">
+          El tiempo escala con el cuadrado de la resolución. Como el validador de
+          color le pasa al modelo solo el recorte del objeto, 640 suele alcanzar.
+        </p>
+      </div>
+
+      <div class="panel" style="border-color:#2d4a6b">
+        <h2>Modo prueba</h2>
+        <label style="display:flex;align-items:center;gap:8px;margin:0 0 8px">
+          <input type="checkbox" id="continuo" style="width:auto" onchange="cambiarModo()">
+          Analizar continuamente
+        </label>
+        <p class="msg" style="margin:0">
+          Corre el modelo todo el tiempo, sin esperar movimiento. Usalo para
+          calibrar; después apagalo.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>Alarma</h2>
+        <label style="display:flex;align-items:center;gap:8px;margin:0">
+          <input type="checkbox" id="sonido" checked style="width:auto"> Sonido al detectar
+        </label>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let ws, modoRoi = false, puntosRoi = [], cajas = [], umbralActual = 0.37;
+
+// ---------------------------------------------------------------- WebSocket
+function conectar() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => setPill('vigilando', 'conectado');
+  ws.onclose = () => { setPill('', 'desconectado'); setTimeout(conectar, 2000); };
+  ws.onmessage = e => manejar(JSON.parse(e.data));
+}
+
+function manejar(d) {
+  if (d.tipo !== 'frame') return;
+  $('placeholder').style.display = 'none';
+  $('video').src = 'data:image/jpeg;base64,' + d.imagen;
+
+  setPill(d.estado, d.estado);
+  $('msg').textContent = d.mensaje;
+
+  // --- medidas ---
+  $('v-mov').textContent    = (d.movimiento * 100).toFixed(1) + '%';
+  $('v-fondo').textContent  = (d.diferencia_fondo * 100).toFixed(2) + '%';
+  $('v-delta').textContent  = d.color_delta_e > 0 ? d.color_delta_e.toFixed(1) : '—';
+  $('v-papel').textContent  = d.color_cambio ? d.color_papel.toFixed(2) : '—';
+  $('v-conf').textContent   = d.confianza > 0 ? d.confianza.toFixed(2) : '—';
+  $('v-score').textContent  = d.score_final > 0 ? d.score_final.toFixed(2) : '—';
+  $('v-confirm').textContent = d.confirmaciones;
+  const pensando = /analizando|preguntándole/i.test(d.mensaje || '');
+  $('v-infer').textContent = pensando ? 'analizando…' : 'en espera';
+  $('v-infer').style.color = pensando ? 'var(--acento)' : '';
+
+  // --- tarjetas de validadores ---
+  tarjeta('color', d.color_ok,
+    d.color_cambio
+      ? `ΔE ${d.color_delta_e.toFixed(0)} · papel ${d.color_papel.toFixed(2)} · ${d.color_area} px`
+      : 'nada nuevo sobre la alfombra');
+  tarjeta('modelo', d.modelo_ok,
+    d.confianza > 0
+      ? `confianza ${d.confianza.toFixed(2)} (umbral ${umbralActual.toFixed(2)})`
+      : (pensando ? 'analizando…' : 'sin consultar'));
+  $('veredicto').textContent = d.veredicto || '—';
+
+  cajas = d.cajas || [];
+  $('video-box').classList.toggle('alarma', d.estado === 'diario');
+  if (d.alarma) dispararAlarma();
+  dibujar();
+}
+
+function tarjeta(cual, ok, sub) {
+  const el = $('val-' + cual);
+  el.className = 'val ' + (ok ? 'si' : 'no');
+  $('sub-' + cual).textContent = sub;
+  $('voto-' + cual).textContent = ok ? 'SÍ' : 'no';
+}
+
+function setPill(clase, texto) {
+  const p = $('pill');
+  p.className = 'pill ' + (clase || '');
+  p.textContent = texto;
+}
+
+// ------------------------------------------------------------------ overlay
+function dibujar() {
+  const cv = $('overlay'), img = $('video');
+  if (!img.naturalWidth) return;
+  cv.width = cv.clientWidth; cv.height = cv.clientHeight;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, cv.width, cv.height);
+
+  const escala = Math.min(cv.width / img.naturalWidth, cv.height / img.naturalHeight);
+  const ox = (cv.width  - img.naturalWidth  * escala) / 2;
+  const oy = (cv.height - img.naturalHeight * escala) / 2;
+
+  if (puntosRoi.length) {
+    ctx.strokeStyle = '#4a9eff'; ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(74,158,255,.12)';
+    ctx.beginPath();
+    puntosRoi.forEach((p, i) => {
+      const x = p[0] * cv.width, y = p[1] * cv.height;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    if (puntosRoi.length > 2 && !modoRoi) ctx.closePath();
+    ctx.stroke();
+    if (puntosRoi.length > 2 && !modoRoi) ctx.fill();
+    puntosRoi.forEach(p => {
+      ctx.fillStyle = '#4a9eff';
+      ctx.beginPath();
+      ctx.arc(p[0] * cv.width, p[1] * cv.height, 5, 0, 7);
+      ctx.fill();
+    });
+  }
+
+  cajas.forEach(c => {
+    const x = ox + c.x1*escala, y = oy + c.y1*escala;
+    const w = (c.x2-c.x1)*escala, h = (c.y2-c.y1)*escala;
+    const esColor = c.origen === 'color';
+    // cian = validador de color; verde/amarillo = modelo según supere el umbral
+    const color = esColor ? '#22d3ee'
+                          : (c.conf >= umbralActual ? '#3fb950' : '#d29922');
+
+    ctx.fillStyle = esColor ? 'rgba(34,211,238,.10)'
+                            : (c.conf >= umbralActual ? 'rgba(63,185,80,.18)'
+                                                      : 'rgba(210,153,34,.15)');
+    ctx.fillRect(x, y, w, h);
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = esColor ? 2 : 4;
+    if (esColor) ctx.setLineDash([7, 5]);
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+
+    if (!esColor) {
+      const L = Math.min(18, w/3, h/3);
+      ctx.lineWidth = 6;
+      [[x,y,1,1],[x+w,y,-1,1],[x,y+h,1,-1],[x+w,y+h,-1,-1]].forEach(([px,py,sx,sy])=>{
+        ctx.beginPath();
+        ctx.moveTo(px + sx*L, py); ctx.lineTo(px, py); ctx.lineTo(px, py + sy*L);
+        ctx.stroke();
+      });
+    }
+
+    const txt = esColor ? c.label : `${c.label}  ${(c.conf*100).toFixed(0)}%`;
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    const tw = ctx.measureText(txt).width + 14;
+    const ty = y > 26 ? y - 22 : y + h + 2;
+    ctx.fillStyle = color;
+    ctx.fillRect(x, ty, tw, 22);
+    ctx.fillStyle = '#08120a';
+    ctx.fillText(txt, x + 7, ty + 16);
+  });
+}
+window.addEventListener('resize', dibujar);
+
+// ---------------------------------------------------------------------- ROI
+$('overlay').addEventListener('click', e => {
+  if (!modoRoi) return;
+  const r = e.target.getBoundingClientRect();
+  puntosRoi.push([(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]);
+  $('msg-roi').textContent = `${puntosRoi.length} punto(s). ` +
+    (puntosRoi.length >= 3 ? 'Clic en "Guardar zona" para terminar.' : '');
+  if (puntosRoi.length >= 3) $('btn-roi').textContent = 'Guardar zona';
+  dibujar();
+});
+
+function toggleRoi() {
+  if (!modoRoi) {
+    modoRoi = true; puntosRoi = [];
+    $('btn-roi').textContent = 'Cancelar';
+    $('msg-roi').textContent = 'Hacé clic en las esquinas de la alfombra.';
+  } else if (puntosRoi.length >= 3) {
+    modoRoi = false;
+    $('btn-roi').textContent = 'Dibujar zona';
+    enviarRoi(puntosRoi);
+  } else {
+    modoRoi = false; puntosRoi = [];
+    $('btn-roi').textContent = 'Dibujar zona';
+    $('msg-roi').textContent = 'Cancelado.';
+  }
+  dibujar();
+}
+
+function limpiarRoi() {
+  puntosRoi = []; modoRoi = false;
+  $('btn-roi').textContent = 'Dibujar zona';
+  enviarRoi([]);
+  dibujar();
+}
+
+async function enviarRoi(puntos) {
+  await fetch('/api/roi', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({puntos})
+  });
+  $('msg-roi').textContent = puntos.length
+    ? 'Zona guardada. Recalibrando la alfombra vacía…'
+    : 'Vigilando toda la imagen.';
+}
+
+async function recalibrar() {
+  await fetch('/api/recalibrar', {method: 'POST'});
+  $('msg-roi').textContent = 'Recalibrando… dejá la alfombra vacía unos segundos.';
+}
+
+// ------------------------------------------------------------------- fusión
+async function cambiarFusion() {
+  const modo = $('fusion').value;
+  const r = await fetch('/api/fusion', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({modo})
+  }).then(r => r.json());
+  if (!r.ok) { $('msg-fusion').textContent = r.error; return; }
+  $('msg-fusion').textContent = EXPLICA[modo] || '';
+  $('modo-actual').textContent = 'modo ' + modo;
+}
+
+const EXPLICA = {
+  cascada: 'El modelo solo corre cuando el color vio algo nuevo. Lo más barato y lo que menos falsos positivos da.',
+  and: 'Los dos validadores tienen que coincidir. Igual de estricto que cascada, pero el modelo corre siempre.',
+  or: 'Dispara con que uno solo diga que sí. Más sensible y con más falsos positivos.',
+  ponderado: 'Promedia los dos scores con los pesos de config.json. Útil si querés que una señal fuerte compense a la otra.',
+  solo_color: 'Apaga OWLv2. Equivale al detect_diario.py original, pero comparando color en vez de gris.',
+  solo_modelo: 'Apaga la validación de color. Solo decide OWLv2.'
+};
+
+// ---------------------------------------------------------------- resolución
+async function cambiarRes() {
+  const r = await fetch('/api/resolucion', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({resolucion: parseInt($('res').value)})
+  }).then(r => r.json());
+  $('msg').textContent = `Resolución del modelo: ${r.resolucion}x${r.resolucion}`;
+}
+
+// --------------------------------------------------------------- modo prueba
+async function cambiarModo() {
+  const continuo = $('continuo').checked;
+  await fetch('/api/modo', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({continuo})
+  });
+  $('msg').textContent = continuo
+    ? 'Modo prueba activo: analizando cada frame.'
+    : 'Modo normal: espero movimiento.';
+}
+
+// ----------------------------------------------------------------- objetivo
+const PRESETS = {
+  diario:   {nombre: 'diario',
+             prompts: ['a rolled newspaper', 'a newspaper', 'a folded newspaper']},
+  anteojos: {nombre: 'anteojos',
+             prompts: ['a pair of eyeglasses', 'glasses', 'sunglasses']}
+};
+
+function preset(k) {
+  $('obj-nombre').value  = PRESETS[k].nombre;
+  $('obj-prompts').value = PRESETS[k].prompts.join('\n');
+  guardarObjetivo();
+}
+
+async function guardarObjetivo() {
+  const nombre  = $('obj-nombre').value.trim();
+  const prompts = $('obj-prompts').value.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!prompts.length) { $('msg-obj').textContent = 'Poné al menos una descripción.'; return; }
+  const r = await fetch('/api/objetivo', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({nombre, prompts})
+  }).then(r => r.json());
+  $('msg-obj').textContent = `Buscando: ${r.prompts.join(', ')}`;
+  silenciar();
+}
+
+// ------------------------------------------------------------------ ajustes
+['conf','mov','est'].forEach(k => {
+  $('s-'+k).addEventListener('input', e => {
+    $('l-'+k).textContent = e.target.value;
+    if (k === 'conf') { umbralActual = parseFloat(e.target.value); avisoConfianza(); dibujar(); }
+  });
+});
+['de','area','papel'].forEach(k => {
+  $('s-'+k).addEventListener('input', e => { $('l-'+k).textContent = e.target.value; });
+});
+
+// OWLv2 no devuelve probabilidades calibradas: 0.6 ya es una detección fuerte.
+function avisoConfianza() {
+  const el = $('aviso-conf');
+  if (umbralActual >= 0.65) {
+    el.innerHTML = '<span style="color:var(--warn)">Muy exigente. En las fotos ' +
+      'de prueba el diario dio 0.62 (a 960) y 0.32 (a 640): con este umbral ' +
+      'no dispararía nunca.</span>';
+  } else if (umbralActual >= 0.45) {
+    el.innerHTML = '<span style="color:var(--warn)">Exigente: sólo detecta ' +
+      'objetos muy claros y bien iluminados.</span>';
+  } else if (umbralActual >= 0.30) {
+    el.innerHTML = '<span style="color:var(--ok)">Zona recomendada: bien ' +
+      'lejos del ruido (0.05) y del objeto real (0.32–0.62).</span>';
+  } else if (umbralActual < 0.12) {
+    el.innerHTML = '<span style="color:var(--warn)">Muy permisivo: vas a ' +
+      'tener falsos positivos.</span>';
+  } else { el.textContent = ''; }
+}
+
+async function guardarAjustes() {
+  await fetch('/api/ajustes', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      confianza_minima:     parseFloat($('s-conf').value),
+      umbral_movimiento:    parseFloat($('s-mov').value),
+      segundos_estabilidad: parseFloat($('s-est').value),
+      mostrar_debiles:      $('debiles').checked
+    })
+  });
+  $('msg').textContent = 'Ajustes del modelo aplicados.';
+}
+
+async function guardarColor() {
+  await fetch('/api/color', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      delta_e_minimo:   parseFloat($('s-de').value),
+      area_minima:      parseInt($('s-area').value),
+      papel_minimo:     parseFloat($('s-papel').value),
+      ignorar_sombras:  $('sombras').checked
+    })
+  });
+  $('msg-color').textContent = 'Umbrales de color aplicados.';
+}
+
+// ------------------------------------------------------------------- alarma
+function dispararAlarma() {
+  const nombre = $('obj-nombre').value.trim() || 'diario';
+  $('banner-txt').textContent = `${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} detectado`;
+  $('banner').classList.add('on');
+  $('banner-hora').textContent = new Date().toLocaleTimeString('es-AR');
+  if ($('sonido').checked) sonar();
+  if (Notification.permission === 'granted')
+    new Notification('Alarma', {body: `Detecté: ${nombre}`});
+}
+
+function silenciar() { $('banner').classList.remove('on'); }
+
+function sonar() {
+  const ac = new (window.AudioContext || window.webkitAudioContext)();
+  [0, .3, .6].forEach(t => {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    o.frequency.value = 880; o.type = 'sine';
+    g.gain.setValueAtTime(.001, ac.currentTime + t);
+    g.gain.exponentialRampToValueAtTime(.3, ac.currentTime + t + .02);
+    g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + t + .22);
+    o.start(ac.currentTime + t); o.stop(ac.currentTime + t + .25);
+  });
+}
+
+// ------------------------------------------------------------------- inicio
+if ('Notification' in window && Notification.permission === 'default')
+  Notification.requestPermission();
+
+fetch('/api/config').then(r => r.json()).then(c => {
+  $('s-conf').value = c.modelo.confianza_minima;
+  $('l-conf').textContent = c.modelo.confianza_minima;
+  umbralActual = c.modelo.confianza_minima;
+  $('debiles').checked = !!c.modelo.mostrar_debiles;
+  if (c.modelo.resolucion) $('res').value = String(c.modelo.resolucion);
+  avisoConfianza();
+
+  $('s-mov').value = c.deteccion.umbral_movimiento;
+  $('l-mov').textContent = c.deteccion.umbral_movimiento;
+  $('s-est').value = c.deteccion.segundos_estabilidad;
+  $('l-est').textContent = c.deteccion.segundos_estabilidad;
+
+  const col = c.color || {};
+  if (col.delta_e_minimo != null) { $('s-de').value = col.delta_e_minimo; $('l-de').textContent = col.delta_e_minimo; }
+  if (col.area_minima != null)    { $('s-area').value = col.area_minima; $('l-area').textContent = col.area_minima; }
+  if (col.papel_minimo != null)   { $('s-papel').value = col.papel_minimo; $('l-papel').textContent = col.papel_minimo; }
+  $('sombras').checked = col.ignorar_sombras !== false;
+
+  const modo = (c.fusion || {}).modo || 'cascada';
+  $('fusion').value = modo;
+  $('msg-fusion').textContent = EXPLICA[modo] || '';
+  $('modo-actual').textContent = 'modo ' + modo;
+
+  $('obj-nombre').value  = c.modelo.nombre_objeto || 'diario';
+  $('obj-prompts').value = (c.modelo.prompts || []).join('\n');
+  if (c.roi.activa) { puntosRoi = c.roi.puntos; dibujar(); }
+});
+
+conectar();
+</script>
+</body>
+</html>
