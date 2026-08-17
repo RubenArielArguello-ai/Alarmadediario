@@ -1,12 +1,38 @@
 {
-    "total_procesadas": 1,
-    "exitosas": 1,
-    "fallidas": 0,
+    "fecha": "2026-08-17T19:57:13.508597",
+    "total_casos": 3,
+    "pasaron": 3,
+    "fallaron": 0,
     "detalles": [
         {
-            "imagen": "resultado_marcado_20260809_212348.jpg",
-            "estado": "OK",
-            "resultado": "(False, 'capturas/resultado_binaria_20260810_144417.png', 'capturas/resultado_marcado_20260810_144417.jpg', [])"
+            "caso": "diario_llego",
+            "fondo": "PHOTO-sindiario.jpg",
+            "actual": "PHOTO-diario.jpg",
+            "esperado": true,
+            "detectado": true,
+            "resultado": "PASS",
+            "n_detecciones": 2,
+            "imagen_marcada": "harness/salidas_test/resultado_marcado_20260817_195713.jpg"
+        },
+        {
+            "caso": "sin_cambios",
+            "fondo": "PHOTO-sindiario.jpg",
+            "actual": "PHOTO-sindiario.jpg",
+            "esperado": false,
+            "detectado": false,
+            "resultado": "PASS",
+            "n_detecciones": 0,
+            "imagen_marcada": "harness/salidas_test/resultado_marcado_20260817_195713.jpg"
+        },
+        {
+            "caso": "viceversa_diario_saco",
+            "fondo": "PHOTO-diario.jpg",
+            "actual": "PHOTO-sindiario.jpg",
+            "esperado": true,
+            "detectado": true,
+            "resultado": "PASS",
+            "n_detecciones": 2,
+            "imagen_marcada": "harness/salidas_test/resultado_marcado_20260817_195713.jpg"
         }
     ]
 }
