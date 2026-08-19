@@ -24,6 +24,7 @@ la alfombra vacía, tiene sentido preguntar.
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -118,6 +119,15 @@ class DetectorHibrido:
         self._ultimo_color = ResultadoColor()
         self._ultimo_veredicto: Veredicto | None = None
 
+        # --- concurrencia ---
+        # procesar() corre en un hilo del pool (server.py hace
+        # asyncio.to_thread), mientras que resolver_inferencia() se llama
+        # directamente desde el loop de eventos cuando termina la inferencia
+        # en OTRO hilo. Ambos leen y escriben self.estado, self.confirmaciones,
+        # etc. al mismo tiempo. RLock (no Lock simple) porque set_roi() llama
+        # a reiniciar_fondo() y las dos toman el lock.
+        self._lock = threading.RLock()
+
     # ------------------------------------------------------------------ atajos
     @property
     def conf_min(self) -> float:
@@ -152,37 +162,40 @@ class DetectorHibrido:
     # -------------------------------------------------------------------- ROI
     def set_roi(self, puntos_rel: list, alto: int, ancho: int) -> None:
         """Define la zona a vigilar. puntos_rel en coordenadas 0-1."""
-        if not puntos_rel or len(puntos_rel) < 3:
-            self.mascara_roi = None
-            self.bbox_roi = None
-            self.color.set_roi(None)
+        with self._lock:
+            if not puntos_rel or len(puntos_rel) < 3:
+                self.mascara_roi = None
+                self.bbox_roi = None
+                self.color.set_roi(None)
+                self.reiniciar_fondo()
+                return
+
+            pts = np.array(
+                [[int(x * ancho), int(y * alto)] for x, y in puntos_rel],
+                dtype=np.int32,
+            )
+            mascara = np.zeros((alto, ancho), dtype=np.uint8)
+            cv2.fillPoly(mascara, [pts], 255)
+            self.mascara_roi = mascara
+
+            margen = 25
+            x1 = max(0, int(pts[:, 0].min()) - margen)
+            y1 = max(0, int(pts[:, 1].min()) - margen)
+            x2 = min(ancho, int(pts[:, 0].max()) + margen)
+            y2 = min(alto, int(pts[:, 1].max()) + margen)
+            self.bbox_roi = (x1, y1, x2, y2)
+            self.color.set_roi(mascara)
             self.reiniciar_fondo()
-            return
-
-        pts = np.array(
-            [[int(x * ancho), int(y * alto)] for x, y in puntos_rel], dtype=np.int32
-        )
-        mascara = np.zeros((alto, ancho), dtype=np.uint8)
-        cv2.fillPoly(mascara, [pts], 255)
-        self.mascara_roi = mascara
-
-        margen = 25
-        x1 = max(0, int(pts[:, 0].min()) - margen)
-        y1 = max(0, int(pts[:, 1].min()) - margen)
-        x2 = min(ancho, int(pts[:, 0].max()) + margen)
-        y2 = min(alto, int(pts[:, 1].max()) + margen)
-        self.bbox_roi = (x1, y1, x2, y2)
-        self.color.set_roi(mascara)
-        self.reiniciar_fondo()
 
     def reiniciar_fondo(self) -> None:
         """Olvida la referencia y vuelve a calibrar (usar al mover la cámara)."""
-        self.color.reiniciar()
-        self.frame_anterior = None
-        self.quieto_desde = None
-        self.confirmaciones = 0
-        self._ultimo_color = ResultadoColor()
-        self.estado = Estado.CALIBRANDO
+        with self._lock:
+            self.color.reiniciar()
+            self.frame_anterior = None
+            self.quieto_desde = None
+            self.confirmaciones = 0
+            self._ultimo_color = ResultadoColor()
+            self.estado = Estado.CALIBRANDO
 
     # ------------------------------------------------------------ pre-proceso
     def _gris(self, frame: np.ndarray) -> np.ndarray:
@@ -212,13 +225,18 @@ class DetectorHibrido:
         """Lo llama el server desde otro hilo. Bloquea, pero no al video."""
         alto, ancho = frame.shape[:2]
 
+        # Tomamos una foto instantánea del color/ROI bajo lock (rápido), y
+        # dejamos la inferencia del modelo (lenta, puede tardar varios
+        # segundos) FUERA del lock: si no, congelaría también a procesar().
+        with self._lock:
+            ultimo_color = self._ultimo_color
+            bbox_roi = self.bbox_roi
+
         # Preferimos el recorte que marcó el validador de color: el objeto pasa
         # a ocupar casi todo el cuadro y OWLv2 sube bastante la confianza.
-        caja = self.color.bbox_regiones(
-            self._ultimo_color, self.margen_recorte, alto, ancho
-        )
+        caja = self.color.bbox_regiones(ultimo_color, self.margen_recorte, alto, ancho)
         if caja is None:
-            caja = self.bbox_roi
+            caja = bbox_roi
 
         recorte, offset = frame, (0, 0)
         if caja is not None:
@@ -241,6 +259,19 @@ class DetectorHibrido:
             and ahora - self.ultima_inferencia >= self.seg_entre_inferencias
         )
 
+    def _puede_entrar_diario(self, ahora: float) -> bool:
+        """
+        Gatilla el cooldown_alarma. Si ya estábamos en DIARIO, siempre se
+        puede (solo refresca el latido, no es una alarma nueva). Si es una
+        entrada fresca —primera vez, o el diario se sacó y volvió a
+        aparecer— solo se permite si ya pasó el tiempo mínimo configurado
+        desde la última alarma. Usado tanto por el camino síncrono
+        (solo_color) como por resolver_inferencia() (con modelo).
+        """
+        if self.estado == Estado.DIARIO:
+            return True
+        return ahora - self.ultima_alarma >= self.cooldown
+
     def _fusionar(self, conf: float) -> Veredicto:
         return self.fusion.evaluar(
             score_color=self._ultimo_color.score,
@@ -253,46 +284,54 @@ class DetectorHibrido:
 
     def resolver_inferencia(self, conf: float, cajas: list) -> None:
         """Aplica el resultado que devolvió el hilo de inferencia."""
-        self._cajas_modelo = cajas
-        self._conf_ultima = conf
-        self._cajas_hasta = time.time() + self.segundos_persistencia
+        with self._lock:
+            self._cajas_modelo = cajas
+            self._conf_ultima = conf
+            self._cajas_hasta = time.time() + self.segundos_persistencia
 
-        veredicto = self._fusionar(conf)
-        self._ultimo_veredicto = veredicto
+            veredicto = self._fusionar(conf)
+            self._ultimo_veredicto = veredicto
 
-        if self.modo_continuo:
-            self.estado = Estado.DIARIO if veredicto.es_diario else Estado.VIGILANDO
-            return
+            if self.modo_continuo:
+                self.estado = (
+                    Estado.DIARIO if veredicto.es_diario else Estado.VIGILANDO
+                )
+                return
 
-        if veredicto.es_diario:
-            self.confirmaciones += 1
-        else:
-            self.confirmaciones = max(0, self.confirmaciones - 1)
+            if veredicto.es_diario:
+                self.confirmaciones += 1
+            else:
+                self.confirmaciones = max(0, self.confirmaciones - 1)
 
-        ahora = time.time()
-        if self.confirmaciones >= self.confirmaciones_necesarias:
-            if ahora - self.ultima_alarma >= self.cooldown:
-                self.ultima_alarma = ahora
-            self.estado = Estado.DIARIO
-        elif self._ultimo_color.hay_cambio and not veredicto.modelo_ok:
-            # Hay un objeto sobre la alfombra, pero no es un diario.
-            self.estado = Estado.DESCARTADO
+            ahora = time.time()
+            if self.confirmaciones >= self.confirmaciones_necesarias:
+                if self._puede_entrar_diario(ahora):
+                    self.ultima_alarma = ahora
+                    self.estado = Estado.DIARIO
+                # si no: seguimos en cooldown, no generamos un nuevo flanco
+                # de alarma en el server. self.estado queda como estaba.
+            elif self._ultimo_color.hay_cambio and not veredicto.modelo_ok:
+                # Hay un objeto sobre la alfombra, pero no es un diario.
+                self.estado = Estado.DESCARTADO
 
     # ---------------------------------------------------------------- público
     def procesar(self, frame: np.ndarray) -> Resultado:
-        if self.modo_continuo:
-            res = self._procesar_continuo(frame)
-        else:
-            res = self._procesar_normal(frame)
+        # Corre en un hilo del pool (server.py: asyncio.to_thread). Todo lo
+        # que toca estado compartido con resolver_inferencia() va bajo lock.
+        with self._lock:
+            if self.modo_continuo:
+                res = self._procesar_continuo(frame)
+            else:
+                res = self._procesar_normal(frame)
 
-        # Las cajas del modelo se mantienen unos segundos para que no
-        # parpadeen: entre inferencia e inferencia pasan varios frames.
-        cajas_modelo = (
-            self._cajas_modelo if time.time() < self._cajas_hasta else []
-        )
-        res.cajas = list(res.cajas) + list(cajas_modelo)
-        if res.confianza == 0.0 and cajas_modelo:
-            res.confianza = self._conf_ultima
+            # Las cajas del modelo se mantienen unos segundos para que no
+            # parpadeen: entre inferencia e inferencia pasan varios frames.
+            cajas_modelo = (
+                self._cajas_modelo if time.time() < self._cajas_hasta else []
+            )
+            res.cajas = list(res.cajas) + list(cajas_modelo)
+            if res.confianza == 0.0 and cajas_modelo:
+                res.confianza = self._conf_ultima
         return res
 
     # ------------------------------------------------------------ modo prueba
@@ -366,7 +405,15 @@ class DetectorHibrido:
         if not self.usa_modelo:
             veredicto = self._fusionar(0.0)
             self._ultimo_veredicto = veredicto
-            self.estado = Estado.DIARIO if veredicto.es_diario else Estado.DESCARTADO
+            if veredicto.es_diario:
+                ahora = time.time()
+                if self._puede_entrar_diario(ahora):
+                    self.ultima_alarma = ahora
+                    self.estado = Estado.DIARIO
+                # si no: en cooldown, mantenemos el estado anterior (no
+                # generamos un nuevo flanco de alarma).
+            else:
+                self.estado = Estado.DESCARTADO
             return self._armar(self.estado, veredicto.explicacion, movimiento)
 
         # --- ya confirmado: no volvemos a molestar al modelo ---
