@@ -134,7 +134,8 @@ distingue un diario de una caja, un zapato o un paquete. Cuando el color dice
 
 ## Resultados del harness
 
-`python harness/run_eval_hibrido.py` — 4/4, precisión 1.00, recall 1.00:
+`python harness/run_eval_hibrido.py` (sin `--con-modelo`) — 4/4, precisión 1.00,
+recall 1.00:
 
 | caso | espera | ΔE | papel | resultado |
 |---|---|---|---|---|
@@ -146,6 +147,17 @@ distingue un diario de una caja, un zapato o un paquete. Cuando el color dice
 El caso del objeto rojo es el interesante: el color cambió muchísimo (ΔE 90) y
 aun así no dispara, porque el score de papel queda en 0.21 contra un umbral de
 0.35.
+
+**Ojo con este número: valida solo el validador de color, no el pipeline
+híbrido completo.** Sin `--con-modelo`, `run_eval_hibrido.py` fuerza el modo de
+fusión a `solo_color` y OWLv2 nunca se instancia. Los 4 casos son sintéticos
+(generados en código, no fotos reales) porque `data/pares/` no existe en el
+repo. "1.00 / 1.00" es un buen resultado de regresión para la parte de color,
+pero no es evidencia de que la fusión con el modelo funcione — para eso hay que
+correr `--con-modelo` y, mejor todavía, agregar pares de fotos reales en
+`data/pares/`. Como referencia, sí probamos la fusión completa (los 4 modos:
+`cascada`, `and`, `or`, `ponderado`) con OWLv2 real sobre fotos reales de la
+entrada — ver "Verificación" más abajo.
 
 ---
 
@@ -181,6 +193,45 @@ Todo está en `config.json`, comentado con claves `_nota`. Los que más importan
 - `hibrido/capturas/detecciones.csv` — una fila por alarma con las dos señales
 - webhook a n8n — desactivado por defecto; se prende en `config.json`
   (`webhook.activo`). Es el mismo endpoint que usaba `detect_diario.py`.
+
+## Verificación (rama `fix/hibrido-robustez`)
+
+Se corrigieron dos bugs reales encontrados en revisión de código, y se
+verificó todo con ejecuciones reales (no solo lectura), sobre `detector.py`:
+
+**1. `cooldown_alarma` no frenaba nada.** El estado pasaba a `diario` sin
+mirar el cooldown; solo se usaba para decidir si actualizar el reloj interno.
+Si el diario se sacaba y se volvía a poner (o alguien probaba el sistema
+moviéndolo), cada ciclo disparaba una alarma nueva sin importar el tiempo
+mínimo configurado. Afectaba **dos** caminos del código: el de
+`resolver_inferencia()` (con modelo) y el síncrono de `solo_color` — cada uno
+tenía su propia copia del bug. Se centralizó en `_puede_entrar_diario()` y se
+verificó con un test que simula: aparece el diario (alarma 1) → se retira → 
+reaparece enseguida (NO debe generar alarma 2, sigue en cooldown) → se espera
+el cooldown → reaparece (ahora sí, alarma 2). Resultado: `2 alarmas nuevas`,
+como se esperaba.
+
+**2. Estado compartido sin lock entre hilos.** `procesar()` corre en un hilo
+del pool (`asyncio.to_thread`, llamado en cada frame) mientras
+`resolver_inferencia()` se llama desde el loop de eventos cuando termina una
+inferencia que corrió en OTRO hilo. Los dos leían y escribían `self.estado`,
+`self.confirmaciones`, `self._ultimo_color`, etc. sin ninguna sincronización.
+Se agregó un `threading.RLock()` que protege ambos caminos, dejando **fuera**
+del lock la parte lenta (la inferencia de OWLv2 en sí, que puede tardar varios
+segundos) para no bloquear la captura de video.
+
+**Integración color + modelo**, probada con OWLv2 real sobre las fotos reales
+de la entrada, en los 4 modos de fusión:
+
+| modo | estado | color_ok | modelo_ok | confianza | cajas |
+|---|---|---|---|---|---|
+| `cascada` | diario | sí | sí | 0.81 | 2 |
+| `and` | diario | sí | sí | 0.81 | 2 |
+| `or` | diario | sí | sí | 0.81 | 2 |
+| `ponderado` | diario | sí | sí | 0.83 (0.35·color + 0.65·modelo) | 2 |
+
+Y sobre la foto vacía (repetida, sin objeto nuevo): `estado=vigilando`, sin
+alarma, en los 4 modos.
 
 ## Límite conocido
 
