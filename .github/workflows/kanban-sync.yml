@@ -1,0 +1,56 @@
+name: Kanban Sync
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+    types: [opened, closed]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  notify-scrum:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve event
+        id: event
+        run: |
+          case "${{ github.event_name }}" in
+            push)
+              echo "type=push" >> "$GITHUB_OUTPUT"
+              echo "branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+              ;;
+            pull_request)
+              if [ "${{ github.event.action }}" = "opened" ]; then
+                echo "type=pr_opened" >> "$GITHUB_OUTPUT"
+              elif [ "${{ github.event.pull_request.merged }}" = "true" ]; then
+                echo "type=pr_merged" >> "$GITHUB_OUTPUT"
+              else
+                echo "type=skip" >> "$GITHUB_OUTPUT"
+              fi
+              echo "branch=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
+              ;;
+            pull_request_review)
+              if [ "${{ github.event.review.state }}" = "changes_requested" ]; then
+                echo "type=pr_changes_requested" >> "$GITHUB_OUTPUT"
+              else
+                echo "type=skip" >> "$GITHUB_OUTPUT"
+              fi
+              echo "branch=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Notify Scrum Master AI
+        if: steps.event.outputs.type != 'skip'
+        run: |
+          curl -sf -X POST "https://scrum.misitiowebpersonal.com.ar/api/webhooks/github" \
+            -H "X-Scrum-Secret: ${{ secrets.SCRUM_ACTIONS_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "event": "${{ steps.event.outputs.type }}",
+              "repo": "${{ github.repository }}",
+              "branch": "${{ steps.event.outputs.branch }}",
+              "base": ${{ toJSON(github.event.pull_request.base.ref) }},
+              "prNumber": ${{ github.event.pull_request.number || 'null' }},
+              "comment": ${{ toJSON(github.event.review.body) }}
+            }'
