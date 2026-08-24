@@ -1,0 +1,88 @@
+{
+  "camara": {
+    "indice": 0,
+    "ancho": 1280,
+    "alto": 720,
+    "fps_captura": 10
+  },
+  "roi": {
+    "activa": false,
+    "puntos": [
+      [0.1, 0.3],
+      [0.9, 0.3],
+      [0.9, 0.95],
+      [0.1, 0.95]
+    ],
+    "_comentario": "La alfombra, en coordenadas relativas 0-1. Se dibuja desde la UI."
+  },
+  "color": {
+    "_que_es": "Validador 1: diferencia de color contra la alfombra vacia (LAB).",
+    "delta_e_minimo": 16.0,
+    "_delta_e_nota": "Delta-E CIE76. 2.3 es lo minimo que ve el ojo; por debajo de 10 es ruido de sensor y cambios de luz. 16 es un color claramente distinto.",
+    "area_minima": 1500,
+    "_area_nota": "Mismo valor que el detect_diario.py original, en pixeles.",
+    "ignorar_sombras": true,
+    "croma_sombra": 6.0,
+    "_sombras_nota": "Una sombra oscurece (dL<0) sin cambiar el tono (croma bajo). Un diario aclara la zona o cambia el tono. Poner en false si la alfombra es blanca.",
+    "frames_calibracion": 15,
+    "saturacion_maxima": 90.0,
+    "brillo_minimo": 90.0,
+    "contraste_referencia": 45.0,
+    "papel_minimo": 0.35,
+    "_papel_nota": "Score 0-1 que mezcla poca saturacion + buen brillo + mucho contraste interno (el texto impreso). Por debajo de papel_minimo, el color no vota que si."
+  },
+  "modelo": {
+    "_que_es": "Validador 2: OWLv2 confirma que el objeto es un diario.",
+    "id": "google/owlv2-base-patch16-ensemble",
+    "carpeta_local": "modelos",
+    "device": "auto",
+    "_device_opciones": "auto | mps (Apple Silicon) | cuda | cpu",
+    "nombre_objeto": "diario",
+    "prompts": [
+      "a rolled newspaper",
+      "a newspaper",
+      "a folded newspaper"
+    ],
+    "_prompts_anteojos": [
+      "a pair of eyeglasses",
+      "glasses",
+      "sunglasses"
+    ],
+    "resolucion": 640,
+    "_resolucion_nota": "960 nativa (lenta), 768, 640, 480, 320. Medido: 960->conf 0.62 en ~30s | 768->0.46 | 640->0.32 | 480->0.29 | 320->0.45 pero con falsos positivos. Con el recorte que le pasa el validador de color, 640 alcanza.",
+    "confianza_minima": 0.37,
+    "mostrar_debiles": false,
+    "_confianza_nota": "Los scores de OWLv2 NO son probabilidades calibradas. Medido en fotos reales: ruido hasta 0.05, diario 0.62 a resolucion 960 y 0.32 a 640. No subas de 0.5 o deja de detectar."
+  },
+  "fusion": {
+    "_que_es": "Como se combinan los dos validadores para dar un veredicto unico.",
+    "modo": "cascada",
+    "_modos": "cascada (color filtra y el modelo decide; el modelo solo corre si el color vio algo) | and | or | ponderado | solo_color (equivale al proyecto original) | solo_modelo",
+    "peso_color": 0.35,
+    "peso_modelo": 0.65,
+    "umbral_ponderado": 0.55,
+    "_pesos_nota": "Solo se usan en modo ponderado."
+  },
+  "deteccion": {
+    "umbral_movimiento": 0.02,
+    "_umbral_movimiento_desc": "Fraccion de pixeles que deben cambiar entre frames para considerar que hay movimiento",
+    "segundos_estabilidad": 3.0,
+    "_segundos_estabilidad_desc": "La escena debe estar quieta este tiempo antes de correr el modelo",
+    "confirmaciones_necesarias": 2,
+    "_confirmaciones_desc": "Veredictos positivos seguidos antes de disparar la alarma",
+    "segundos_entre_inferencias": 2.0,
+    "cooldown_alarma": 60.0,
+    "margen_recorte": 40,
+    "_margen_recorte_desc": "Pixeles de contexto alrededor de la region de color que se le pasa al modelo"
+  },
+  "guardado": {
+    "guardar_capturas": true,
+    "carpeta": "capturas",
+    "guardar_csv": true
+  },
+  "webhook": {
+    "activo": false,
+    "url": "http://localhost:5678/webhook-test/4388a0a2-d83e-4102-ba86-34c5660e8092",
+    "_nota": "Mismo webhook n8n que usaba detect_diario.py. Poner activo en true para reactivarlo."
+  }
+}
