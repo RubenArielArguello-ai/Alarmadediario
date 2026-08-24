@@ -1,0 +1,62 @@
+{
+  "modo_fusion": "solo_color",
+  "con_modelo": false,
+  "total": 4,
+  "aciertos": 4,
+  "vp": 1,
+  "vn": 3,
+  "fp": 0,
+  "fn": 0,
+  "precision": 1.0,
+  "recall": 1.0,
+  "detalles": [
+    {
+      "caso": "sint: diario sobre la alfombra",
+      "esperado": true,
+      "obtenido": true,
+      "resultado": "OK",
+      "delta_e": 55.0,
+      "papel": 0.775,
+      "area": 30815,
+      "confianza_modelo": 0.0,
+      "score_final": 0.865,
+      "explicacion": "solo color: score 0.87 (papel 0.78)"
+    },
+    {
+      "caso": "sint: solo una sombra",
+      "esperado": false,
+      "obtenido": false,
+      "resultado": "OK",
+      "delta_e": 0.0,
+      "papel": 0.0,
+      "area": 0,
+      "confianza_modelo": 0.0,
+      "score_final": 0.0,
+      "explicacion": "solo color: score 0.00 (papel 0.00)"
+    },
+    {
+      "caso": "sint: objeto rojo (no es papel)",
+      "esperado": false,
+      "obtenido": false,
+      "resultado": "OK",
+      "delta_e": 90.33,
+      "papel": 0.212,
+      "area": 17450,
+      "confianza_modelo": 0.0,
+      "score_final": 0.527,
+      "explicacion": "solo color: score 0.53 (papel 0.21)"
+    },
+    {
+      "caso": "sint: escena igual + ruido",
+      "esperado": false,
+      "obtenido": false,
+      "resultado": "OK",
+      "delta_e": 0.0,
+      "papel": 0.0,
+      "area": 0,
+      "confianza_modelo": 0.0,
+      "score_final": 0.0,
+      "explicacion": "solo color: score 0.00 (papel 0.00)"
+    }
+  ]
+}

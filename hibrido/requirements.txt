@@ -1,0 +1,21 @@
+# Alarma de Diario - versión híbrida (color + OWLv2)
+# Instalar con:  pip install -r hibrido/requirements.txt
+#
+# El proyecto original (detect_diario.py) solo necesita opencv, numpy y
+# requests. Todo lo pesado de acá abajo es exclusivo del validador 2.
+
+# IMPORTANTE (Mac Intel): PyTorch dejó de publicar builds para macOS x86
+# después de la 2.2.2, y esa versión necesita transformers de la rama 4.x.
+# Por eso los topes de versión. En Apple Silicon o Linux podés sacarlos.
+torch>=2.2.0,<2.3.0
+torchvision>=0.17.0,<0.18.0
+transformers>=4.40.0,<5.0.0
+
+scipy>=1.10.0             # lo usa el image processor de OWLv2 para el resize
+pillow>=10.0.0
+opencv-python>=4.9.0      # captura de cámara y visión clásica
+numpy>=1.24.0,<2.0.0      # torch 2.2 no soporta numpy 2.x
+
+fastapi>=0.110.0          # servidor local
+uvicorn[standard]>=0.29.0 # ASGI server + websockets
+requests>=2.31.0          # webhook a n8n (igual que el proyecto original)

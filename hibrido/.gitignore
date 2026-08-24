@@ -1,0 +1,13 @@
+# Pesos de OWLv2: ~620 MB. No van al repo.
+# Se bajan una sola vez con:  python descargar_modelo.py
+# Sin barra final, para que también ignore el symlink que se puede usar
+# durante el desarrollo para apuntar a una copia ya descargada.
+modelos
+
+# Salidas de ejecución
+capturas/
+*.csv
+
+__pycache__/
+*.pyc
+.venv/
