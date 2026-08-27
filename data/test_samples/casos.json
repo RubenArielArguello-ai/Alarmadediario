@@ -1,0 +1,5 @@
+[
+  { "nombre": "diario_llego", "fondo": "PHOTO-sindiario.jpg", "actual": "PHOTO-diario.jpg", "esperado": true },
+  { "nombre": "sin_cambios", "fondo": "PHOTO-sindiario.jpg", "actual": "PHOTO-sindiario.jpg", "esperado": false },
+  { "nombre": "viceversa_diario_saco", "fondo": "PHOTO-diario.jpg", "actual": "PHOTO-sindiario.jpg", "esperado": true }
+]
