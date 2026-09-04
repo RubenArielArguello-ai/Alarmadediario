@@ -1,0 +1,44 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git config user.name)",
+      "Bash(git config user.email)",
+      "Bash(curl:*)",
+      "Bash(cat > /tmp/cuerpo.json:*)",
+      "Read(scrumDocs/**)",
+      "Write(scrumDocs/**)",
+      "Edit(scrumDocs/**)",
+      "Read(//tmp/cuerpo.json)",
+      "Write(//tmp/cuerpo.json)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/id_rsa*)",
+      "Edit(.claude/settings.json)",
+      "Write(.claude/settings.json)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --delete:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(rm -rf:*)"
+    ]
+  },
+  "env": {
+    "SCRUM_API_URL": "https://scrum.misitiowebpersonal.com.ar"
+  }
+}
