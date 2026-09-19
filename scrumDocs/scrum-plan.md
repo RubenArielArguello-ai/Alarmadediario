@@ -1,12 +1,12 @@
 # Plan de Requerimientos — Alarmadediario
 
-_Generado automáticamente el 2026-09-19T13:16:54.701Z — no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-09-19T13:17:33.518Z — no editar a mano, se sobreescribe en cada publicación._
 
 Orden sugerido de desarrollo (respeta dependencias entre Requerimientos). Cada fila indica de qué Requerimientos depende, si tiene.
 
 | Orden | Código | Requerimiento | Historia de Usuario | Módulo | Entrega | Estado | Desarrollador | Depende de | Rechazos |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | RF-01 | Captura de imagen mediante camara | RO-01 | — | — | Hecho | rubenArguello | — | — |
+| 1 | RF-01 | Captura de imagen mediante camara | RO-01 | — | — | Haciendo | rubenArguello | — | — |
 | 2 | RF-01 | Procesamiento de imagen con Open cv | RO-02 | — | — | Hacer | Sin asignar | — | — |
 | 3 | RF-01 | Deteccion automatica de diario | RO-03 | — | — | Hacer | rubenArguello | — | — |
 | 4 | RF-01 | Evaluacion automatizada mediante harness | RO-04 | — | — | Hacer | rubenArguello | — | — |
