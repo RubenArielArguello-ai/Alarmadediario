@@ -1,6 +1,6 @@
 # Scrum Master — qué podés hacer en este proyecto
 
-_Generado automáticamente el 2026-09-04T13:56:22.182Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-09-24T19:23:07.912Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Este es el documento de **tu** rol. El procedimiento paso a paso está en
 `.claude/skills/sm-sync/SKILL.md`.
@@ -21,11 +21,33 @@ to_do → doing → pr_open ──merge──▶ merged_dev │ in_testing → t
 Antes de eso está tu otra mitad, que no se ve en el tablero: decidir **quién** hace qué y
 **en qué orden**, con las dependencias resueltas.
 
+## El desglose se entrega ordenado
+
+Lo que entregás no es una lista de Requerimientos: es una lista **ordenada**. Cada
+Requerimiento nuevo declara en `dependencies` qué tiene que estar andando para que éste se
+pueda **probar** — no para que se pueda escribir. Y se declara al crearlo, no después al
+agendar: dejarlo para más tarde es cómo termina un backlog donde todo parece poder empezar
+hoy.
+
+Un Requerimiento sin dependencias es una afirmación —"éste se puede empezar hoy"—, no un
+campo vacío.
+
+**Y con sus condiciones de aprobación.** `acceptanceCriteria` dice qué tiene que ser verdad
+para dar ESA tarjeta por terminada — no la Historia entera, la tarjeta. El programador las
+recorre una por una antes de pedir el merge y QA arma sus Tests a partir de ahí, así que una
+condición que no se pueda verificar mirando el sistema todavía no está terminada de
+escribir. Si no las podés escribir, el Requerimiento no está listo para crearse: o falta
+entender qué se pidió, o es demasiado grande y hay que partirlo.
+
+**Y la fragmentación es tuya.** Una Historia cuyo desglose es un solo Requerimiento que
+hace todo no está desglosada: no se puede repartir, ni estimar, ni probar por partes. Si
+un Requerimiento no se puede probar solo, o falta una dependencia o falta partirlo.
+
 ## Qué escribís del Requerimiento
 
 **Campos que podés escribir** con `PATCH /api/v1/requirements/[id]`:
 
-`assignee` · `status` · `deliveryId` · `estimated` · `dependencies` · `start` · `end` · `progress`
+`assignee` · `status` · `deliveryId` · `userStoryId` · `integrantes` · `mostrarAlSocio` · `acceptanceCriteria` · `estimated` · `dependencies` · `start` · `end` · `progress`
 
 **Estados que podés fijar a mano**: `to_do` · `doing` · `pr_open`.
 
@@ -152,7 +174,7 @@ vos, se ignora.
 | `GET` | `/api/v1/projects/[id]/requirements` | Todos los Requerimientos del proyecto con su estado, asignado, estimación y dependencias. |
 | `GET` | `/api/v1/projects/[id]/user-stories` | Historias de Usuario y contenedores operacionales, con sus Requerimientos colgando. |
 | `POST` | `/api/v1/projects/[id]/user-stories` | Crear una Historia de Usuario (`kind: "historia"`) o un **Requerimiento operacional** (`kind: "operacional"`): el trabajo real que no nace de una Historia — levantar la VM donde va a correr `testing`, preparar la de producción, una capacitación, una auditoría, una reunión con el cliente. El Product Owner sólo `historia`; el **Scrum Master sólo `operacional`**; el PM las dos. El operacional nace con su primer Requerimiento adentro, así que `estimated` y `assignee` del cuerpo van a ese hijo. |
-| `PATCH` | `/api/v1/requirements/[id]` | Editar un Requerimiento: mover la tarjeta, asignar, estimar, anotar observaciones, agendar. Qué campos podés tocar depende del rol, y el developer sólo sobre lo que tiene asignado. Ver la sección "Campos" de este documento. |
+| `PATCH` | `/api/v1/requirements/[id]` | Editar un Requerimiento: mover la tarjeta, asignar, estimar, anotar observaciones, agendar. Qué campos podés tocar depende del rol, y el developer sólo sobre lo que tiene asignado. Ver la sección "Campos" de este documento. `integrantes` es la lista COMPLETA de las personas afectadas a la actividad además del responsable (ids o nombres de usuario): se manda entera, así que sacar a alguien es mandarla sin esa persona. Es información de agenda para el Grafo y no le da ningún permiso sobre el Requerimiento. |
 | `DELETE` | `/api/v1/requirements/[id]/block` | Destrabar: saca el candado y devuelve la tarjeta al estado anterior. |
 | `POST` | `/api/v1/requirements/[id]/block` | Bloquear un Requerimiento con motivo escrito y responsable. Congela el reloj. Cualquier miembro bloquea: el impedimento lo encuentra quien lo encuentra. `esRechazo: true` (review que pide cambios) es sólo del PM y del Scrum Master. |
 | `POST` | `/api/v1/requirements/[id]/merge` | Integrar a `dev` el PR de un Requerimiento que está en `pr_open`. Decide por estado: los ya integrados responden 200 idempotente, el resto 409. |
