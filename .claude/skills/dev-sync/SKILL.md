@@ -670,6 +670,46 @@ una sola vez y no se reinicia.
       o de configuración), cargá el Test igual con los pasos manuales en `description` y
       `expectedResult` — que QA sepa QUÉ mirar y CÓMO, aunque lo haga a ojo.
 
+   4.1.5. **Dejá el entorno verificable desde la app, la primera vez que toque.** Los
+      Tests contra un entorno local los corre **el navegador** de quien prueba, no el
+      servidor de Scrum —que vive en otra máquina y no llega a la tuya—. Si tu app no
+      devuelve `Access-Control-Allow-Origin`, el navegador no deja leer la respuesta y
+      **ninguna condición se puede verificar**: el tablero pasa a depender de que alguien
+      diga "confiá en mí".
+
+      Configuralo vos, una vez por proyecto, **en los settings de desarrollo**:
+
+      ```python
+      # Django -- settings de desarrollo, NUNCA los de producción
+      # pip install django-cors-headers
+      INSTALLED_APPS += ['corsheaders']
+      MIDDLEWARE.insert(0, 'corsheaders.middleware.CorsMiddleware')   # antes de CommonMiddleware
+      CORS_ALLOWED_ORIGINS = ['https://scrum.tudominio.com']          # el origen de la instancia
+      ```
+
+      ```js
+      // Express -- sólo en desarrollo
+      app.use(require('cors')({ origin: 'https://scrum.tudominio.com' }));
+      ```
+
+      ```python
+      # FastAPI
+      app.add_middleware(CORSMiddleware, allow_origins=['https://scrum.tudominio.com'])
+      ```
+
+      **Tres límites que no se negocian:**
+
+      1. **Sólo el origen de la instancia de Scrum**, nunca `*` ni
+         `CORS_ALLOW_ALL_ORIGINS = True`. Abrirlo a todos significa que cualquier página
+         que la persona tenga abierta puede hablarle a su app con sus cookies.
+      2. **Sólo en los settings de desarrollo.** En producción esto no va: ahí las pruebas
+         las corre el servidor contra el entorno desplegado y no pasan por CORS.
+      3. **Anotalo en el documento de entrega**, en "cómo se levanta y cómo se prueba".
+         El próximo que clone el repo tiene que saber que eso está y por qué.
+
+      Si el proyecto ya tiene un Requerimiento operacional para esto, es ése el que estás
+      cerrando: no lo hagas de contrabando dentro de otra tarjeta.
+
    4.2. **Y el script, que es lo que QA no puede escribir por vos.** Un archivo ejecutable
       en `scrumDocs/entregas/<CODIGO>.sh`, commiteado, que se corra con un comando y sin
       configurar nada:
