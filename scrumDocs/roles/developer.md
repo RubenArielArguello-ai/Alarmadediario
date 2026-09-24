@@ -1,6 +1,6 @@
 # Developer — qué podés hacer en este proyecto
 
-_Generado automáticamente el 2026-09-24T19:23:10.053Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-09-24T19:39:56.913Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Este es el documento de **tu** rol. Lo leés vos (la IA que asiste a un `developer`) y nadie
 más: los otros roles tienen el suyo en `scrumDocs/roles/`. El procedimiento paso a paso
@@ -38,6 +38,22 @@ Y las credenciales: usás **las que el usuario tenga puestas** (`gh` autenticado
 `$GITHUB_TOKEN` exportado). No salgas a buscar tokens por el repositorio, el `.env` o la
 config de git: uno encontrado así casi nunca es el de esta persona, y usarlo escribe en
 GitHub a nombre de otro. Si no hay credencial, eso **es** el impedimento.
+
+## Dejá el entorno verificable, o nada de lo que entregues se puede comprobar
+
+Los Tests contra un entorno local los corre el **navegador** de quien prueba: el servidor
+de Scrum vive en otra máquina y no llega a la tuya. Si tu app no devuelve
+`Access-Control-Allow-Origin` con el origen de la instancia, el navegador no deja leer la
+respuesta y **ninguna condición se puede verificar** — el tablero pasa a depender de que
+alguien diga "confiá en mí".
+
+Se configura una vez por proyecto, **en los settings de desarrollo**, y con el origen
+exacto: nunca `*`. Abrirlo a todos deja que cualquier página abierta le hable a tu app con
+tus cookies. En producción no va: ahí las pruebas las corre el servidor contra el entorno
+desplegado y no pasan por CORS.
+
+Si el proyecto tiene un Requerimiento operacional para esto, es ése el que cerrás; si no lo
+tiene, pedílo antes de que todos los demás arrastren el mismo bloqueo.
 
 ## Uno por vez, terminado de verdad
 
