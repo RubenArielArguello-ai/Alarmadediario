@@ -335,6 +335,13 @@ Scrum Master.
    | "Código prolijo y documentado" | No se verifica mirando el sistema | Eso es la definición de terminado del equipo, no una condición de esta tarjeta |
    | "Rápido" | No tiene número | "La búsqueda responde en menos de 2 segundos con 10.000 registros" |
 
+   **Verificable quiere decir verificable DESDE LA APP**, no sólo en la cabeza de
+   alguien: alguien tiene que poder abrir el Test en "Verificación en vivo", darle
+   correr y ver el resultado. Si para eso hace falta que el entorno esté preparado
+   (que permita la verificación, que tenga datos semilla, que exponga un endpoint de
+   salud), eso no es parte de esta condición: es un **operacional** aparte y va
+   ANTES, como dependencia. Ver el modo `operacional` más abajo.
+
    **Si no las podés escribir, el Requerimiento no está listo para crearse.** Casi
    siempre significa una de dos cosas: falta entender qué se pidió —y eso se
    pregunta, no se adivina—, o el Requerimiento es demasiado grande y hay que
@@ -420,6 +427,26 @@ endpoint que el modo `crear`.
    ```
    Con un solo hijo, renombrar el contenedor le propaga el nombre; con dos o más, cada uno
    conserva el suyo.
+   **Y si el proyecto todavía no se puede verificar desde la app, eso es un
+   operacional y va primero.** Las condiciones de aprobación se comprueban corriendo
+   los Tests desde "Verificación en vivo", y contra un entorno local esa corrida sale
+   del navegador de quien prueba. Si la app del cliente no devuelve
+   `Access-Control-Allow-Origin`, el navegador no deja leer la respuesta y ninguna
+   condición se puede verificar — con lo cual todo el tablero pasa a depender de que
+   alguien diga "confiá en mí".
+
+   Creá el operacional una sola vez por proyecto, al principio, con estas condiciones:
+
+   ```
+   - El entorno de desarrollo responde Access-Control-Allow-Origin con el origen de
+     la instancia de Scrum, y sólo con ese
+   - La configuración vive en los settings de DESARROLLO, no en los de producción
+   - Un paso de verificación contra el entorno local devuelve su respuesta en la app
+   ```
+
+   Es trabajo del developer y lleva minutos, pero si no está hecho, cada Requerimiento
+   que venga después arrastra el mismo bloqueo.
+
 4. **Enganchalo como dependencia de lo que lo necesita**, con el modo `agendar`: si la
    tanda que va a `testing` depende de esa VM, el Requerimiento que se prueba ahí lleva el
    operacional en `dependencies`. Es la mitad del valor de cargarlo: una promoción que
