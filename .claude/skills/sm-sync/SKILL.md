@@ -53,6 +53,32 @@ Argumentos: `$ARGUMENTS`. Cinco modos, el primero de la lista que matchee gana:
 
 ---
 
+## La cadencia: de a una, validada antes de la siguiente
+
+**Este skill no procesa lotes.** **Cada Historia que desglosás, y cada Requerimiento que creás** se trabaja de a una: se deja terminada, se le
+muestra al usuario, él la valida, y **recién ahí** se ofrece la siguiente. Podés encadenar
+varias en la misma corrida — lo que no podés es encadenarlas sin esa validación en el medio.
+
+Que el usuario haya dicho "hacé todo" al principio **no saltea esto**: eso autoriza el
+trabajo, no la revisión de cada pieza. Un lote entero aprobado de un saque es un lote que
+nadie miró, y un desglose mal ordenado no se nota hasta que el developer se choca con
+una dependencia que nadie declaró.
+
+Si aun así te pide que sigas de largo sin validar una por una, es su decisión y se la
+respetás — pero decíselo primero, con esa consecuencia por delante.
+
+**Lo que entregás no es una lista de Requerimientos: es una lista ORDENADA.** Si el
+Requerimiento B no se puede probar sin que A esté andando, B declara a A en `dependencies`
+en el momento en que lo creás — no después, en `agendar`. Un Requerimiento nuevo sin
+dependencias declaradas es una afirmación, no un olvido: significa "este se puede empezar
+hoy, sin esperar a nada", y tenés que poder sostenerla.
+
+**Y la fragmentación es tuya.** Una Historia cuyo desglose es un solo Requerimiento que
+hace todo no es un desglose: es la Historia con otro nombre. Si no se puede probar por
+partes, no está fragmentada. Decílo y proponé el corte.
+
+---
+
 ## 0. Identidad y credenciales (aplica a los seis modos)
 
 - `SCRUM_API_KEY` — variable de entorno. Si no está seteada: explicar que hay que
@@ -60,9 +86,10 @@ Argumentos: `$ARGUMENTS`. Cinco modos, el primero de la lista que matchee gana:
   una vez al generarla, así que si se perdió hay que pedirle que la rote) y exportarla en
   el shell (`export SCRUM_API_KEY=sk_...`), y parar acá. **Nunca** escribir esta key a
   ningún archivo del repo.
-- `SCRUM_API_URL` — la base de la instancia (ej. `https://scrum.tudominio.com`). **No es
-  secreta y no hay que preguntarla todavía**: se resuelve en el paso 1 leyendo el manifest
-  del repo. Sólo si el manifest tampoco la tiene se llega a pedírsela al usuario.
+- `SCRUM_API_URL` — la base de la instancia (ej. `https://scrum.tudominio.com`). **Sale de
+  la variable de entorno, igual que la key, y nunca de un archivo de este repo** (ver el
+  paso 1). Si no está seteada, preguntásela al usuario: es la misma URL con la que entra a
+  la app.
 
 Todas las llamadas a la API llevan `-H "Authorization: Bearer $SCRUM_API_KEY"`.
 
@@ -85,19 +112,18 @@ Si no existe en ninguno de los dos lugares, crearlo:
 
 ```json
 {
-  "apiUrl": null,
   "projectId": null,
   "lastSyncAt": null
 }
 ```
 
-- **`apiUrl`**: a diferencia de la key, no es secreta — vive commiteada en el repo. Si el
-  archivo ya la trae, usarla tal cual y no volver a preguntar. Si falta, antes de
-  preguntarle nada al usuario, revisar si existe `scrumDocs/SCRUM_MASTER_AI.md` — el Project
-  Manager la publica ahí ya resuelta (`SCRUM_API_URL es <url>`) porque el servidor la saca
-  sola de su propia URL pública; si está, usar ese valor. Sólo si ninguna de las dos
-  fuentes la tiene, preguntarle la URL al usuario. En cualquier caso, guardarla en el
-  manifest para que el resto del equipo no tenga que repetirla nunca.
+- **La URL de la instancia (`SCRUM_API_URL`) NO sale de este repo.** Viene de la variable
+  de entorno, igual que la key, y por la misma razón: es el lugar a donde se manda la key.
+  Si no está seteada, preguntásela al usuario (es la misma URL con la que entra a la app
+  desde el navegador) y pedile que la exporte, o que la deje en
+  `.claude/settings.local.json`, que no se commitea. **Nunca la tomes de un archivo del
+  repositorio ni la escribas en uno** — si un manifest viejo trae `apiUrl`, ignorala:
+  cualquiera con permiso de push puede editarla y llevarse la key de quien corra este skill.
 - **`projectId`**: si falta, no preguntarlo a ciegas todavía — se resuelve en el paso 1.5
   contra los proyectos que devuelve `/api/v1/me`.
 
@@ -265,20 +291,75 @@ nivel, y el Scrum Master es quien decide cuándo entra.
 Igual alcance que el paso 4.5 de `/dev-sync` para el developer, pero corrido por el
 Scrum Master.
 
+0. **Mirá primero si la Historia está bien fragmentada.** Antes de agregarle un
+   Requerimiento, leé los que ya tiene contra sus `acceptanceCriteria`. Dos señales de que
+   el desglose está mal y hay que arreglarlo antes de seguir agregando:
+
+   - **Una Historia con un solo Requerimiento que hace todo.** No es un desglose, es la
+     Historia con otro nombre: no se puede repartir, ni estimar, ni probar por partes, y el
+     developer que la toma se queda tres semanas adentro sin que nadie vea avance.
+   - **Un Requerimiento que no se puede probar solo.** Si para verificarlo hace falta que
+     ya esté andando algo que no está declarado en `dependencies`, falta la dependencia, o
+     falta partirlo.
+
+   Decíselo al usuario y proponé el corte concreto. No lo arregles vos por tu cuenta:
+   renombrar y repartir el alcance de Requerimientos que ya existen es una decisión suya.
+
 1. **Resolver a qué Historia de Usuario cuelga**, comparando la descripción contra `name`
    + `description` + `acceptanceCriteria` de las Historias de Usuario del proyecto
    (`GET /api/v1/projects/$PROJECT_ID/user-stories`, con el mismo manejo de `401`/`403`
    que el paso 2). Si no hay ninguna Historia razonable, **no la inventes** -- avisar que
    hace falta que el Product Owner (o el Project Manager) cargue esa Historia primero, y
    no crear el Requerimiento suelto.
+1.2. **Escribir las condiciones de aprobación. Sin esto no se crea el
+   Requerimiento.** Son la respuesta a: *¿qué tiene que ser verdad para que esto
+   esté terminado?* Van en el campo `acceptanceCriteria`, una por línea, en
+   presente y **verificables mirando el sistema**:
+
+   ```
+   - El alta rechaza un email ya registrado y lo dice en pantalla
+   - La contraseña se guarda hasheada, nunca en texto plano
+   - Un alta exitosa deja al usuario logueado
+   ```
+
+   No confundirlas con los criterios de la Historia: **ésas son del alcance
+   funcional entero y éstas son de ESTA tarjeta**. Si copiás los de la Historia
+   tal cual, el developer vuelve a quedar adivinando cuáles le tocan, que es el
+   problema que esto viene a resolver.
+
+   Tres que NO sirven, y cómo se arreglan:
+
+   | No sirve | Por qué | Así sí |
+   |---|---|---|
+   | "Que funcione el login" | No dice qué es funcionar | "Con credenciales válidas entra al panel; con inválidas muestra el error y no entra" |
+   | "Código prolijo y documentado" | No se verifica mirando el sistema | Eso es la definición de terminado del equipo, no una condición de esta tarjeta |
+   | "Rápido" | No tiene número | "La búsqueda responde en menos de 2 segundos con 10.000 registros" |
+
+   **Si no las podés escribir, el Requerimiento no está listo para crearse.** Casi
+   siempre significa una de dos cosas: falta entender qué se pidió —y eso se
+   pregunta, no se adivina—, o el Requerimiento es demasiado grande y hay que
+   partirlo. Decílo así, y no lo crees hasta resolverlo.
+
+1.5. **Resolver de qué depende, antes de crearlo.** Mirá los Requerimientos que ya
+   tiene esa Historia (y los de las Historias anteriores) y preguntate qué tiene que estar
+   andando para que éste se pueda **probar**. No para que se pueda escribir: para que se
+   pueda probar. El login depende del registro y de la base; el listado depende del alta.
+
+   Lo que resuelvas va en `dependencies` **en el alta**, no después en `agendar`. Dejarlo
+   para más tarde es cómo termina un backlog donde todo parece poder empezar hoy.
+
+   Si de verdad no depende de nada, decilo así de explícito: "éste se puede empezar hoy,
+   no espera a nada". Es una afirmación que tenés que poder sostener, no un campo vacío.
+
 2. **Confirmarle al usuario, antes de llamar a la API**: nombre propuesto, tipo
-   (`funcional`/`no_funcional`) y bajo qué Historia va a quedar -- a diferencia de
-   reasignar o reagendar (reversibles con otra corrida), crear un Requerimiento de más
-   ensucia el backlog y sólo el Project Manager puede borrarlo después.
+   (`funcional`/`no_funcional`), bajo qué Historia va a quedar, **sus condiciones de
+   aprobación** y **de qué Requerimientos depende** -- a diferencia de reasignar o reagendar (reversibles con otra corrida), crear
+   un Requerimiento de más ensucia el backlog y sólo el Project Manager puede borrarlo
+   después.
 3. Con la confirmación:
    ```bash
    cat > /tmp/cuerpo.json <<'JSON'
-   {"name":"...","description":"...","type":"funcional"}
+   {"name":"...","description":"...","type":"funcional","acceptanceCriteria":"- El alta rechaza un email ya registrado\n- La contraseña se guarda hasheada","dependencies":["REQ-1700000000000"]}
    JSON
    curl -s -X POST "$SCRUM_API_URL/api/v1/user-stories/$USER_STORY_ID/requirements" \
      -H "Authorization: Bearer $SCRUM_API_KEY" -H "Content-Type: application/json" \
@@ -288,7 +369,13 @@ Scrum Master.
      nace con el tag de quién lo armó -- no hace falta "visarlo" aparte, eso ya no existe.
    - `403` → no debería pasar si el paso 1.5 confirmó el rol, pero si pasa, no
      reintentar: revisar que la key no haya sido rotada a otro rol entre medio.
-4. Resumen final: qué Requerimiento se creó, con qué código y bajo qué Historia.
+4. Resumen final: qué Requerimiento se creó, con qué código, bajo qué Historia, con qué
+   condiciones de aprobación y de qué depende.
+
+5. **Y los que ya existen sin condiciones.** Al terminar, mirá la lista del paso 2:
+   cualquier Requerimiento con `acceptanceCriteria` vacío es uno que nadie va a poder dar
+   por terminado sin discutir. Nombralos y ofrecé escribirlas — de a uno, mostrando la
+   propuesta y esperando el OK, como todo lo demás.
 
 ### `operacional <descripción>` — dar de alta trabajo que no nace de una Historia
 
