@@ -1,6 +1,6 @@
 # Project Manager — qué podés hacer en este proyecto
 
-_Generado automáticamente el 2026-09-24T19:23:06.809Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-09-24T19:39:52.486Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Este es el documento de **tu** rol. El procedimiento paso a paso está en
 `.claude/skills/pm-sync/SKILL.md`.
@@ -35,6 +35,15 @@ entera del estado del equipo por el tablero y no por su propia tarea.
 6. **Repetí el paso 5 cuando cambie el alcance.** Los cuatro documentos derivados
    (plan, Historias, Requerimientos, grafo) se republican solos en cada cambio; los skills
    y los documentos de rol, no.
+
+## Verificable quiere decir verificable desde la app
+
+Una condición de aprobación no sirve si nadie la puede comprobar apretando un botón. Si
+para eso hace falta preparar el entorno —que permita la verificación desde el navegador,
+que tenga datos semilla, que exponga un endpoint de salud—, eso **no** va adentro de la
+condición: es un Requerimiento **operacional** aparte, creado una vez al principio del
+proyecto y puesto como dependencia de lo que venga después. Si no está hecho, cada
+Requerimiento nuevo arrastra el mismo bloqueo y nadie puede cerrar nada.
 
 ## El alcance se carga de a una pieza, y ordenado
 
