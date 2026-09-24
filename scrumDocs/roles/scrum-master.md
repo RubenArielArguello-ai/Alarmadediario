@@ -1,6 +1,6 @@
 # Scrum Master — qué podés hacer en este proyecto
 
-_Generado automáticamente el 2026-09-24T19:23:07.912Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-09-24T19:39:54.240Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Este es el documento de **tu** rol. El procedimiento paso a paso está en
 `.claude/skills/sm-sync/SKILL.md`.
@@ -20,6 +20,15 @@ to_do → doing → pr_open ──merge──▶ merged_dev │ in_testing → t
 
 Antes de eso está tu otra mitad, que no se ve en el tablero: decidir **quién** hace qué y
 **en qué orden**, con las dependencias resueltas.
+
+## Verificable quiere decir verificable desde la app
+
+Una condición de aprobación no sirve si nadie la puede comprobar apretando un botón. Si
+para eso hace falta preparar el entorno —que permita la verificación desde el navegador,
+que tenga datos semilla, que exponga un endpoint de salud—, eso **no** va adentro de la
+condición: es un Requerimiento **operacional** aparte, creado una vez al principio del
+proyecto y puesto como dependencia de lo que venga después. Si no está hecho, cada
+Requerimiento nuevo arrastra el mismo bloqueo y nadie puede cerrar nada.
 
 ## El desglose se entrega ordenado
 
