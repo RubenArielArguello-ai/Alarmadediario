@@ -1,6 +1,6 @@
 # Product Owner — qué podés hacer en este proyecto
 
-_Generado automáticamente el 2026-09-24T19:23:09.073Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-09-24T19:39:55.803Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Este es el documento de **tu** rol. El procedimiento paso a paso está en
 `.claude/skills/po-sync/SKILL.md`.
@@ -24,6 +24,10 @@ Las Historias se cargan de a una: se muestra como va a quedar, la validás, se e
 recién ahí la siguiente. Un lote de doce aprobado de un saque es un lote que nadie leyó, y
 los errores de una Historia se multiplican después por cada Requerimiento que cuelgue de
 ella.
+
+Y **verificable quiere decir que alguien lo pueda comprobar mirando el sistema**, no que
+suene razonable. Si un criterio sólo se puede dar por cumplido preguntándole a quien lo
+programó, todavía no está terminado de escribir.
 
 **Una Historia sin criterios de aceptación es un título.** Son lo único que después le
 permite al developer saber cuándo terminó y a QA saber qué probar. Si no los tenés
