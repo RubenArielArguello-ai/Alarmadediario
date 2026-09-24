@@ -1,6 +1,6 @@
 # Requerimientos -- Alarmadediario
 
-_Generado automaticamente el 2026-09-19T13:17:36.109Z -- no editar a mano, se sobreescribe en cada publicacion._
+_Generado automaticamente el 2026-09-24T19:22:54.204Z -- no editar a mano, se sobreescribe en cada publicacion._
 
 ## RO-01: Captura de imagen mediante camara
 
@@ -9,11 +9,19 @@ _Generado automaticamente el 2026-09-19T13:17:36.109Z -- no editar a mano, se so
 El sistema debe obtener imagenes en tiempo real mediante la camara para disponer de os datos necesarios para el procesamiento y posterior deteccion del diario
 
 
+**Condiciones de aprobación**
+
+_Sin condiciones de aprobación cargadas: pedíselas al Project Manager o al Scrum Master antes de darlo por terminado._
+
 ## RO-02: Procesamiento de imagen con Open cv
 
 ### RF-01: Procesamiento de imagen con Open cv (Funcional)
 
 El sistema debe procesar los cuadros obtenidos desde la camara utilizando open cv para preparar la imagen y permitir la identificacion del diario 
+
+**Condiciones de aprobación**
+
+_Sin condiciones de aprobación cargadas: pedíselas al Project Manager o al Scrum Master antes de darlo por terminado._
 
 ## RO-03: Deteccion automatica de diario
 
@@ -21,11 +29,19 @@ El sistema debe procesar los cuadros obtenidos desde la camara utilizando open c
 
 El siatema deve analizar las imagenes procesadas y detrerminar si el diario se encuentra presente frente a la amara , informando de la deteccion.
 
+**Condiciones de aprobación**
+
+_Sin condiciones de aprobación cargadas: pedíselas al Project Manager o al Scrum Master antes de darlo por terminado._
+
 ## RO-04: Evaluacion automatizada mediante harness
 
 ### RF-01: Evaluacion automatizada mediante harness (Funcional)
 
 El proyecto debe ejecutar una evaluacion automatizada mediante harness para verificar el funcionamiento de la deteccion del diario y validar los resultados obtenidos.
+
+**Condiciones de aprobación**
+
+_Sin condiciones de aprobación cargadas: pedíselas al Project Manager o al Scrum Master antes de darlo por terminado._
 
 ## RO-05: Generacion de reporte de evaluacion
 
@@ -33,14 +49,26 @@ El proyecto debe ejecutar una evaluacion automatizada mediante harness para veri
 
 el sistema de evaluacion debe generar un reporte con los resultadfos obtenidos para facilitar el analisis seguimiento y verificacion del funcionamiento del proyecto.
 
+**Condiciones de aprobación**
+
+_Sin condiciones de aprobación cargadas: pedíselas al Project Manager o al Scrum Master antes de darlo por terminado._
+
 ## RO-06: Pipeline integracion ciontinua
 
 ### RF-01: Pipeline integracion ciontinua (Funcional)
 
 El proyecto debe contar con un pipeline automatizado que ejecute las validaciones configuradas cuando se ejecuten cambios en el repositorio, permitiendo detectar errores antes de integrar los cambios.
 
+**Condiciones de aprobación**
+
+_Sin condiciones de aprobación cargadas: pedíselas al Project Manager o al Scrum Master antes de darlo por terminado._
+
 ## RO-07: Documentacion y mantenimiento del proyecto
 
 ### RF-01: Documentacion y mantenimiento del proyecto (Funcional)
 
 La documentacion del proyecto debe mantenerse actualizada y versionada junto con el codigo para facilitar el seguimiento, mantrenimiento y comprension del sistema.
+
+**Condiciones de aprobación**
+
+_Sin condiciones de aprobación cargadas: pedíselas al Project Manager o al Scrum Master antes de darlo por terminado._
