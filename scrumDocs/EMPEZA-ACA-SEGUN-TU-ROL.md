@@ -1,6 +1,6 @@
 # Empezá acá: este repo está conectado a Scrum Master AI
 
-_Generado automáticamente el 2026-09-04T13:56:27.920Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-09-24T19:23:14.148Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Si el usuario te pidió leer la documentación de este proyecto, o arrancó una conversación
 sobre "qué sigue", "cargar requerimientos", "sincronizar tests", "reportar avance" o
@@ -13,19 +13,24 @@ que necesites entender qué le podés pedir a otra persona del equipo.
 
 ## 1. Conseguir la API key
 
-Preguntale al usuario **sólo** por `SCRUM_API_KEY` (si no la tenés ya como variable de
-entorno) — se la genera su Project Manager desde "Usuarios Activos" en la app. Si no la
-tiene, explicáselo y pedile que la consiga antes de seguir. **Nunca** la escribas a ningún
+Preguntale al usuario por `SCRUM_API_KEY` (si no la tenés ya como variable de entorno) —
+se la genera su Project Manager desde "Usuarios Activos" en la app. Si no la tiene,
+explicáselo y pedile que la consiga antes de seguir. **Nunca** la escribas a ningún
 archivo del repo, sólo se usa desde la variable de entorno.
 
-## 2. La URL de la instancia ya la sabés -- no la preguntes
+Lo mismo vale para la URL a la que se manda esa key: sale del entorno, no del repo (paso 2).
 
-`SCRUM_API_URL` es `https://scrum.misitiowebpersonal.com.ar`. Se generó sola a partir de la URL con la que tu
-Project Manager entra a la app, así que es un dato fijo de este repo, no algo que
-tengas que pedirle a nadie. Usala directo en las llamadas de los pasos siguientes.
-Si vas a crear/leer `scrumDocs/scrum-manifest.json` o `scrumDocs/po-manifest.json` (se usan
-de acá en adelante para no repetir preguntas), guardala ahí en el campo `apiUrl`
-si todavía no está.
+## 2. La URL de la instancia (`SCRUM_API_URL`) sale del entorno, nunca del repo
+
+Va junto a la key, en la variable de entorno o en `.claude/settings.local.json`
+(que no se commitea), por la misma razón que la key: **es el lugar a donde se manda**.
+Si `$SCRUM_API_URL` no está seteada, preguntásela al usuario -- es la misma URL con la
+que él entra a la app desde el navegador -- y pedile que la exporte para la próxima.
+
+**Nunca la tomes de un archivo de este repositorio**, ni la escribas en uno: ni del
+manifest (si un manifest viejo trae `apiUrl`, ignorala), ni de `scrumDocs/`, ni de
+`.claude/settings.json`. Cualquiera con permiso de push puede editar esos archivos, y
+mandar la key a la URL que diga uno de ellos es entregársela.
 
 ## 3. Identificar el rol — nunca preguntarlo
 
@@ -78,8 +83,9 @@ necesita es entender qué hay en el proyecto y qué puede pedir a partir de acá
    - Qué puede pedirte a partir de acá, en casos de uso concretos: eso está en la sección
      "Lo que más vas a hacer" del documento de su rol, escrito en lenguaje de usuario.
    - Para qué sirve `scrumDocs/scrum-manifest.json` (o `po-manifest.json`) que se acaba de
-     leer o crear: guarda `projectId` y `apiUrl` para no volver a preguntarlos nunca más en
-     este repo, no tiene secretos, conviene commitearlo.
+     leer o crear: guarda el `projectId` y las referencias de trazabilidad para no volver a
+     preguntarlos nunca más en este repo, no tiene secretos, conviene commitearlo. La URL
+     de la instancia **no** va ahí (paso 2).
    - **Cerrá proponiendo el siguiente paso concreto, no con una pregunta abierta.** El
      documento del rol dice cuál es para ese rol. Proponelo como algo que podés hacer ahora
      mismo ("¿arranco por X?"). Sólo si ninguno de esos casos aplica, preguntá abierto.
