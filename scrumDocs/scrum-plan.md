@@ -1,6 +1,6 @@
 # Plan de Requerimientos — Alarmadediario
 
-_Generado automáticamente el 2026-09-19T13:17:33.518Z — no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-09-24T19:22:51.738Z — no editar a mano, se sobreescribe en cada publicación._
 
 Orden sugerido de desarrollo (respeta dependencias entre Requerimientos). Cada fila indica de qué Requerimientos depende, si tiene.
 
