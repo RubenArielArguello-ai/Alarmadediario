@@ -1,6 +1,6 @@
 # Project Manager — qué podés hacer en este proyecto
 
-_Generado automáticamente el 2026-09-04T13:56:21.040Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-09-24T19:23:06.809Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Este es el documento de **tu** rol. El procedimiento paso a paso está en
 `.claude/skills/pm-sync/SKILL.md`.
@@ -36,11 +36,21 @@ entera del estado del equipo por el tablero y no por su propia tarea.
    (plan, Historias, Requerimientos, grafo) se republican solos en cada cambio; los skills
    y los documentos de rol, no.
 
+## El alcance se carga de a una pieza, y ordenado
+
+Cada Historia se valida antes de cargar la siguiente, y ninguna se carga sin criterios de
+aceptación. Cada Requerimiento nuevo se crea con sus **condiciones de aprobación**
+(`acceptanceCriteria`, propias de esa tarjeta) y declarando de qué depende: el orden y la
+definición de terminado son parte del desglose, no un ajuste posterior.
+
+Una Historia con un solo Requerimiento que hace todo no está fragmentada. Si no se puede
+probar por partes, hay que cortarla antes de que alguien la tome.
+
 ## Qué escribís del Requerimiento
 
 **Campos que podés escribir** con `PATCH /api/v1/requirements/[id]`:
 
-`name` · `description` · `type` · `status` · `assignee` · `estimated` · `real` · `observations` · `dependencies` · `position` · `start` · `end` · `rescheduleFromEstimate` · `moduleId` · `progress` · `aiGenerated` · `deliveryId` · `approvalStatus`
+`name` · `description` · `type` · `acceptanceCriteria` · `status` · `assignee` · `estimated` · `real` · `observations` · `dependencies` · `position` · `start` · `end` · `rescheduleFromEstimate` · `moduleId` · `progress` · `aiGenerated` · `deliveryId` · `userStoryId` · `integrantes` · `mostrarAlSocio` · `approvalStatus`
 
 **Estados que podés fijar a mano**: `to_do` · `doing` · `pr_open`.
 
@@ -114,7 +124,7 @@ curl -s -X POST "$SCRUM_API_URL/api/v1/projects/$PROJECT_ID/user-stories" \
 | `GET` | `/api/v1/projects/[id]/user-stories` | Historias de Usuario y contenedores operacionales, con sus Requerimientos colgando. |
 | `POST` | `/api/v1/projects/[id]/user-stories` | Crear una Historia de Usuario (`kind: "historia"`) o un **Requerimiento operacional** (`kind: "operacional"`): el trabajo real que no nace de una Historia — levantar la VM donde va a correr `testing`, preparar la de producción, una capacitación, una auditoría, una reunión con el cliente. El Product Owner sólo `historia`; el **Scrum Master sólo `operacional`**; el PM las dos. El operacional nace con su primer Requerimiento adentro, así que `estimated` y `assignee` del cuerpo van a ese hijo. |
 | `DELETE` | `/api/v1/requirements/[id]` | Borrar un Requerimiento. |
-| `PATCH` | `/api/v1/requirements/[id]` | Editar un Requerimiento: mover la tarjeta, asignar, estimar, anotar observaciones, agendar. Qué campos podés tocar depende del rol, y el developer sólo sobre lo que tiene asignado. Ver la sección "Campos" de este documento. |
+| `PATCH` | `/api/v1/requirements/[id]` | Editar un Requerimiento: mover la tarjeta, asignar, estimar, anotar observaciones, agendar. Qué campos podés tocar depende del rol, y el developer sólo sobre lo que tiene asignado. Ver la sección "Campos" de este documento. `integrantes` es la lista COMPLETA de las personas afectadas a la actividad además del responsable (ids o nombres de usuario): se manda entera, así que sacar a alguien es mandarla sin esa persona. Es información de agenda para el Grafo y no le da ningún permiso sobre el Requerimiento. |
 | `DELETE` | `/api/v1/requirements/[id]/block` | Destrabar: saca el candado y devuelve la tarjeta al estado anterior. |
 | `POST` | `/api/v1/requirements/[id]/block` | Bloquear un Requerimiento con motivo escrito y responsable. Congela el reloj. Cualquier miembro bloquea: el impedimento lo encuentra quien lo encuentra. `esRechazo: true` (review que pide cambios) es sólo del PM y del Scrum Master. |
 | `POST` | `/api/v1/requirements/[id]/merge` | Integrar a `dev` el PR de un Requerimiento que está en `pr_open`. Decide por estado: los ya integrados responden 200 idempotente, el resto 409. |
