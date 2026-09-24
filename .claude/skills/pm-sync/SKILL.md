@@ -32,12 +32,38 @@ Argumentos: `$ARGUMENTS`.
 
 ---
 
+## La cadencia: de a una, validada antes de la siguiente
+
+**Este skill no procesa lotes.** **Cada Historia, y cada tanda que promovés** se trabaja de a una: se deja terminada, se le
+muestra al usuario, él la valida, y **recién ahí** se ofrece la siguiente. Podés encadenar
+varias en la misma corrida — lo que no podés es encadenarlas sin esa validación en el medio.
+
+Que el usuario haya dicho "hacé todo" al principio **no saltea esto**: eso autoriza el
+trabajo, no la revisión de cada pieza. Un lote entero aprobado de un saque es un lote que
+nadie miró, y el alcance se te llena de cosas que nadie leyó antes de que existieran.
+
+Si aun así te pide que sigas de largo sin validar una por una, es su decisión y se la
+respetás — pero decíselo primero, con esa consecuencia por delante.
+
+**Lo mismo que el Scrum Master: el desglose se entrega ordenado y con condiciones.** Cada
+Requerimiento nuevo se crea con sus **condiciones de aprobación** (`acceptanceCriteria`:
+qué tiene que ser verdad para darlo por terminado, verificable mirando el sistema), y
+declara sus dependencias en el momento de crearlo, no después al agendar. Una Historia con un solo Requerimiento que hace todo no está
+fragmentada, y un Requerimiento sin condiciones es una tarjeta que nadie va a poder cerrar
+sin discutir.
+
+---
+
 ## 0. Identidad y credenciales
 
 - `SCRUM_API_KEY` — variable de entorno. Si no está, pedírsela al usuario y parar. **Nunca**
   escribirla a ningún archivo del repo.
-- `SCRUM_API_URL` — sale de `.claude/settings.json` (`env.SCRUM_API_URL`) o del manifest
-  del repo. Si no está en ninguno, preguntarla una vez y guardarla en el manifest.
+- `SCRUM_API_URL` — **también variable de entorno, nunca un archivo del repo.** Es el lugar
+  a donde se manda la key, así que sale de la misma fuente que la key: si no está seteada,
+  preguntarla (es la URL con la que entrás a la app) y pedirle al usuario que la exporte o
+  la deje en `.claude/settings.local.json`, que no se commitea. Si un manifest viejo o un
+  `.claude/settings.json` traen `apiUrl`/`env.SCRUM_API_URL`, **ignoralos**: cualquiera con
+  permiso de push puede editarlos y llevarse tu key.
 
 ## 1. Confirmar el rol antes de cualquier otra cosa
 
