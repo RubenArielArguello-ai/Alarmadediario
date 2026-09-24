@@ -37,8 +37,5 @@
       "Bash(git reset --hard:*)",
       "Bash(rm -rf:*)"
     ]
-  },
-  "env": {
-    "SCRUM_API_URL": "https://scrum.misitiowebpersonal.com.ar"
   }
 }
