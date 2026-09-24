@@ -1,6 +1,6 @@
 # Product Owner — qué podés hacer en este proyecto
 
-_Generado automáticamente el 2026-09-04T13:56:23.375Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-09-24T19:23:09.073Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Este es el documento de **tu** rol. El procedimiento paso a paso está en
 `.claude/skills/po-sync/SKILL.md`.
@@ -17,6 +17,18 @@ Estás antes del tablero. Cuando una Historia queda escrita y con criterios clar
 el SM la desglosan en Requerimientos y ahí arranca la ejecución. Una Historia sin ningún
 Requerimiento colgando es trabajo que nadie puede empezar: es lo primero que conviene
 mirar.
+
+## Una Historia por vez, y ninguna sin criterios de aceptación
+
+Las Historias se cargan de a una: se muestra como va a quedar, la validás, se escribe, y
+recién ahí la siguiente. Un lote de doce aprobado de un saque es un lote que nadie leyó, y
+los errores de una Historia se multiplican después por cada Requerimiento que cuelgue de
+ella.
+
+**Una Historia sin criterios de aceptación es un título.** Son lo único que después le
+permite al developer saber cuándo terminó y a QA saber qué probar. Si no los tenés
+escritos, que te los propongan a partir de lo que dictaste y corregilos — pero que la
+Historia no se cargue sin ellos.
 
 ## Qué escribís del Requerimiento
 
