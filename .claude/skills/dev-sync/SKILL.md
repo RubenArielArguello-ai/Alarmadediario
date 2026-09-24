@@ -46,16 +46,49 @@ Argumentos: `$ARGUMENTS`. Dos formas:
 
 ---
 
+## La cadencia: de a una, validada antes de la siguiente
+
+**Este skill no procesa lotes.** **Un Requerimiento** se trabaja de a una: se deja terminada, se le
+muestra al usuario, él la valida, y **recién ahí** se ofrece la siguiente. Podés encadenar
+varias en la misma corrida — lo que no podés es encadenarlas sin esa validación en el medio.
+
+Que el usuario haya dicho "hacé todo" al principio **no saltea esto**: eso autoriza el
+trabajo, no la revisión de cada pieza. Un lote entero aprobado de un saque es un lote que
+nadie miró, y en el próximo Requerimiento vas a estar parado sobre código que nadie
+verificó.
+
+Si aun así te pide que sigas de largo sin validar una por una, es su decisión y se la
+respetás — pero decíselo primero, con esa consecuencia por delante.
+
+**Y acá la regla es más dura que en el resto de los skills: no se empieza el siguiente
+hasta que el actual esté cerrado de verdad** — criterios de aceptación recorridos uno por
+uno, pruebas escritas y corriendo en verde, documentación en el repo, Pull Request abierto
+y la tarjeta en `pr_open`. No alcanza con "ya lo implementé". El paso 5.6 es esa puerta y
+no se saltea.
+
+Trabajar dos Requerimientos a la vez es el defecto que este skill más veces tuvo que
+corregir: ramas apiladas, commits de una tarjeta adentro de otra, y un Pull Request que
+promueve trabajo que nadie pidió en esa tanda.
+
+**Ojo con no confundir dos cosas distintas.** "De a uno por vez" es una regla: un
+Requerimiento abierto, una rama, terminado antes del siguiente. **"En orden" no es una
+regla, es un consejo**: el orden de dependencias existe para que las pruebas signifiquen
+algo, pero si lo anterior está bloqueado o lo tiene otra persona, adelantar un
+Requerimiento posterior gana tiempo real. Lo decís, decís qué implica, y el usuario
+decide. Ver el paso 2.
+
+---
+
 ## 0. Identidad y credenciales (aplica a las dos formas)
 
 - `SCRUM_API_KEY` — variable de entorno. Si no está seteada: explicar que hay que
   pedírsela al admin del proyecto (la genera desde "Gestión de Accesos" en la app) y
   exportarla en el shell (`export SCRUM_API_KEY=sk_...`), y parar acá. **Nunca** escribir
   esta key a ningún archivo del repo.
-- `SCRUM_API_URL` — la base de la instancia (ej. `https://scrum.tudominio.com`). **No
-  es secreta y no hay que preguntarla todavía**: se resuelve en el paso 1 leyendo el
-  manifest del repo. Sólo si el manifest tampoco la tiene se llega a pedírsela al
-  usuario.
+- `SCRUM_API_URL` — la base de la instancia (ej. `https://scrum.tudominio.com`). **Sale de
+  la variable de entorno, igual que la key, y nunca de un archivo de este repo** (ver el
+  paso 1). Si no está seteada, preguntásela al usuario: es la misma URL con la que entra a
+  la app.
 
 Todas las llamadas a la API llevan `-H "Authorization: Bearer $SCRUM_API_KEY"`.
 
@@ -76,21 +109,19 @@ Si no existe en ninguno de los dos lugares, crearlo:
 
 ```json
 {
-  "apiUrl": null,
   "projectId": null,
   "lastSyncAt": null,
   "mappings": []
 }
 ```
 
-- **`apiUrl`**: a diferencia de la key, no es secreta — vive commiteada en el repo.
-  Si el archivo ya la trae, usarla tal cual y no volver a preguntar. Si falta, antes de
-  preguntarle nada al usuario, revisar si existe `scrumDocs/SCRUM_MASTER_AI.md` — el Project
-  Manager la publica ahí ya resuelta (`SCRUM_API_URL es <url>`) porque el servidor la saca
-  sola de su propia URL pública; si está, usar ese valor. Sólo si ninguna de las dos
-  fuentes la tiene, preguntarle la URL al usuario. En cualquier caso, guardarla en el
-  manifest para que el resto del equipo (developer/PO/QA que clonen este mismo repo) no
-  tenga que repetirla nunca.
+- **La URL de la instancia (`SCRUM_API_URL`) NO sale de este repo.** Viene de la variable
+  de entorno, igual que la key, y por la misma razón: es el lugar a donde se manda la key.
+  Si no está seteada, preguntásela al usuario (es la misma URL con la que entra a la app
+  desde el navegador) y pedile que la exporte, o que la deje en
+  `.claude/settings.local.json`, que no se commitea. **Nunca la tomes de un archivo del
+  repositorio ni la escribas en uno** — si un manifest viejo trae `apiUrl`, ignorala:
+  cualquiera con permiso de push puede editarla y llevarse la key de quien corra este skill.
 - **`projectId`**: si falta, no preguntarlo a ciegas todavía — se resuelve en el paso 1.5
   contra los proyectos que devuelve `/api/v1/me`.
 
@@ -200,6 +231,11 @@ curl -s -X PATCH "$SCRUM_API_URL/api/v1/requirements/$REQUIREMENT_ID" \
   solo (la cuenta dueña de la key). Cualquier otro PATCH sobre algo que no es tuyo
   contesta `403 "Este Requerimiento no está asignado a vos: ..."` -- no es la key ni el
   endpoint, así que no los toques: tomalo con `doing` primero, o esa tarjeta no es tuya.
+- **`pr_open` sale de `doing` y exige rama.** No es una recomendación: el PATCH
+  contesta `400` si la tarjeta no pasó por Haciendo, y otro `400` si el Requerimiento
+  no tiene rama abierta. Las dos cosas son lo que hace que el estado signifique algo —
+  el reloj corre en `doing`, y el trabajo vive en la rama. El camino es siempre
+  `doing` → rama → push verificado → `pr_open`.
 - **Antes de mover el estado a `doing` o `pr_open`, asegurá la rama.** El paso 2 ya te trajo
   `githubBranch` y `gitlabBranch` de cada Requerimiento: si los dos vienen en `null`, ese
   Requerimiento **no tiene rama**: el PATCH mueve la tarjeta igual, pero después el
@@ -364,6 +400,26 @@ Reportarle al usuario, en texto, no en JSON crudo:
 
 ### `siguiente` — decidir qué Requerimiento encarar y dejarlo listo para trabajar
 
+**Este modo se ejecuta de punta a punta, solo.** Rama, checkout, `doing`, código, pruebas,
+commit, push, Pull Request y `pr_open`: todo eso lo hacés vos. **No le pidas al usuario que
+haga un paso de git, de GitHub o una transición de estado que podés resolver con un comando
+o una llamada a la API.** Frenar a mitad para que alguien copie y pegue un `git push` no es
+prudencia: es dejar la tarjeta a medio camino, con el reloj corriendo y el trabajo sin
+entregar.
+
+Las únicas cosas que sí frenan, y que no son trámites sino decisiones:
+
+| Frena | Por qué |
+|---|---|
+| La suite en rojo | No se entrega lo que no pasa sus propias pruebas |
+| Una condición de aprobación sin cubrir | El Requerimiento no está terminado, aunque compile |
+| Un commit de otro Requerimiento en la rama | El PR viaja entero y arrastraría trabajo que nadie pidió |
+| Trabajo ajeno en la rama, sin resolver | No se pisa lo que escribió otro |
+| No poder abrir el PR (sin permiso, sin credencial) | Es un impedimento real, y se ve |
+
+Ninguna de esas se resuelve preguntando: se resuelven trabajando, o son un impedimento que
+hay que nombrar.
+
 Este modo asume el flujo: pull a la rama principal → leer el plan → decidir con
 criterio cuál sigue → **marcar el Requerimiento como `doing`** → asegurar la rama →
 commit + push. El push también dispara el pase a "Haciendo" por webhook o GitHub Action,
@@ -389,6 +445,32 @@ una sola vez y no se reinicia.
      que nunca se tocó — es la más urgente de resolver.
    Si hay empate real entre varias candidatas razonables, preguntarle al usuario cuál
    prefiere — no adivinar.
+
+   **El orden se asesora, no se impone.** Si el Requerimiento que se va a encarar depende
+   de otro que todavía no está terminado, decílo antes de arrancar: nombrá de qué depende,
+   en qué estado está eso, y qué implica avanzar igual. Después es decisión del usuario, y
+   la respetás sin volver a discutirla.
+
+   Y hay un caso donde adelantarse es lo correcto, no una excepción que se tolera:
+   **cuando lo anterior está `blocked` o en manos de otra persona, esperar es tiempo
+   perdido.** Si ves eso, proponelo vos: "RF-02 está bloqueado esperando la VM; puedo
+   arrancar RF-05, que no depende de nada de eso".
+
+   Lo que sí hacés al avanzar fuera de orden, siempre:
+
+   - **Dejarlo escrito en `observations`**: sobre qué se está construyendo sin verificar.
+     Es lo que va a leer quien revise el PR y quien lo pruebe.
+   - **Decir qué parte no vas a poder probar todavía.** Si el login se apoya en un
+     registro que aún no está verificado, sus pruebas se escriben igual, pero lo que
+     certifiquen vale hasta ahí. Eso va en la tabla de criterios del paso 5.6.4.5, no
+     escondido.
+   - **Saber que QA no lo va a certificar antes que a su dependencia**, y con razón: un
+     test que pasa apoyado en algo sin probar no dice si pasó por lo que probaba o de
+     casualidad. Adelantar el desarrollo gana tiempo; adelantar la certificación no gana
+     nada.
+
+   Lo que no cambia es que sea **de a uno por vez**: avanzar fuera de orden significa
+   elegir otro Requerimiento, no tener dos abiertos a la vez.
 3. **Mover la tarjeta a "Haciendo" antes de escribir una línea de código**:
    ```bash
    cat > /tmp/cuerpo.json <<'JSON'
@@ -436,9 +518,54 @@ una sola vez y no se reinicia.
    ```
    - `{"alreadyExists":false,...,"checkoutCommand":"git fetch && git checkout <rama>"}`
      → rama nueva, recién creada en el repo a partir de la rama base del proyecto.
-   - `{"alreadyExists":true,...}` → ya existía (se está retomando trabajo previo).
+   - `{"alreadyExists":true,...}` → ya existía. **Acá no sigas de largo**: mirá
+     `branchState`, que viene en la misma respuesta y dice qué hay adentro.
    - `409` → el proyecto no tiene el repositorio configurado; avisar y parar.
    Ejecutar el `checkoutCommand` devuelto tal cual.
+
+   **Qué dice `branchState`.** "Ya existía" no distingue tu trabajo de ayer de una
+   rama que dejó otra persona, y esa confusión ya costó una Historia entera: el dev
+   leyó "ya está hecho", se paró sobre el commit de otro developer, y su `git push`
+   contestó `Everything up-to-date` sin que nada se lo advirtiera.
+
+   | `branchState` | Qué significa | Qué hacés |
+   |---|---|---|
+   | `existe: false` | La rama figura en la base pero **ya no está en el repositorio** | Avisale al usuario y pará: la rama la tiene que volver a abrir alguien, o el Requerimiento apunta a un repo que cambió |
+   | `aheadBy: 0` | Recién nacida de la rama base, sin nada propio todavía | Es tu punto de partida limpio. Seguí |
+   | `aheadBy > 0` y `lastCommit.author` **sos vos** | Estás retomando tu propio trabajo | Seguí desde ahí |
+   | `aheadBy > 0` y `lastCommit.author` es **otra persona** | Alguien más ya trabajó en este Requerimiento | **Mostrale al usuario el sha, el autor, la fecha y el mensaje, y preguntá antes de escribir una línea.** Puede ser trabajo válido que hay que continuar, o un ensayo abandonado que hay que descartar. No lo decidís vos |
+   | `null` | No se pudo consultar el repositorio (token sin permiso, proveedor caído) | Decilo, y mirá la rama con `git log` vos mismo antes de seguir |
+
+   `behindBy` alto no frena nada, pero conviene decirlo: la rama arrancó hace mucho y
+   el merge posterior va a traer conflictos.
+
+4.1. **Plantate en la rama, no la construyas vos.** Antes de correr el
+   `checkoutCommand`, `git status --porcelain` tiene que salir **vacío**: lo que quedó sin
+   commitear del Requerimiento anterior se cuela en esta rama si te lo llevás puesto.
+   Después de correrlo, verificá que quedaste donde la app creó la rama:
+
+   ```bash
+   git status --porcelain                                  # vacío ANTES de cambiar de rama
+   git fetch origin && git checkout -B <rama> origin/<rama>  # el checkoutCommand
+   git rev-parse HEAD && git rev-parse origin/<rama>         # tienen que dar lo MISMO
+   ```
+
+   **Nunca `git checkout -b <rama>` a secas ni `git branch <rama>` desde donde estés
+   parado**, y nunca ramifiques de la rama del Requerimiento anterior. La rama sale de la
+   rama de integración y de ningún otro lado — por eso el `checkoutCommand` de una rama
+   nueva viene con `-B ... origin/<rama>` y no con un `checkout` pelado.
+
+   Esto es lo que evita el defecto más caro que tuvo este flujo: en un proyecto real las
+   **once ramas quedaron apiladas**, cada una arrastrando el commit del Requerimiento
+   anterior, porque el developer siguió trabajando sobre su propia línea y el
+   `git pull --rebase` posterior replicó ese commit adentro de la rama nueva. Mergear una
+   arrastraba el trabajo de la otra, con su tarjeta todavía sin pedirlo.
+
+   Si el push te rebota con *non-fast-forward* y la salida propone `git pull --rebase`:
+   **pará.** Sobre una rama recién creada eso significa que estás parado en el lugar
+   equivocado, y rebasar va a replicar commits ajenos adentro de tu rama. Volvé a plantarte
+   con el `checkoutCommand` y traé tu trabajo con `git cherry-pick` de tus commits, o
+   decíselo al usuario.
 5. **Commit + push**. **Siempre a la rama del Requerimiento, nunca a `dev`, `testing` ni
    a la rama de producción — aunque tengas permiso de escritura sobre ellas, o seas dueño
    del repositorio.** Que git te deje no es una autorización. Si te encontrás parado en una
@@ -446,6 +573,11 @@ una sola vez y no se reinicia.
    `dev` saltea la revisión de quien integra y deja el trabajo sin Pull Request, así que el
    webhook no tiene qué reportar, la tarjeta se queda en `to_do` y el tiempo real queda en
    cero para siempre.
+   - **Todo commit nombra el id de su Requerimiento** (`REQ-...`), en el asunto o al
+     final entre paréntesis: `feat(auth): registro de usuarios (REQ-1788962591125)`. No es
+     cosmético — el PATCH del paso 7 lee los mensajes de la rama y **rechaza con `400` si
+     encuentra commits que nombran a OTRO Requerimiento del proyecto**, que es cómo se
+     detecta una rama apilada.
    - Si la rama era nueva: hacer un commit inicial marcador (ej. mensaje
      `"Inicio de trabajo en $REQUIREMENT_ID: <nombre>"`, aunque sea vacío con
      `git commit --allow-empty` si todavía no hay cambios de código) y
@@ -459,7 +591,25 @@ una sola vez y no se reinicia.
      tiene que llevar algo tangible — un archivo de documentación en el propio repo
      describiendo la decisión tomada (no un commit vacío sin explicación). Usar criterio
      sobre dónde documentarlo (`docs/`, un README de la carpeta relevante, etc.).
-5.5. **Chequeo de alcance, antes de abrir el PR.** Corré `git diff dev...<rama> --stat` y
+   - **Verificá que el push aterrizó, siempre.** `git push` puede contestar
+     `Everything up-to-date` y eso **no es éxito**: es que no había nada que subir,
+     casi siempre porque commiteaste en otra rama o porque nunca commiteaste. El
+     chequeo son dos líneas:
+
+     ```bash
+     git rev-parse HEAD                  # tu commit
+     git rev-parse origin/<rama>         # lo que quedó en el servidor
+     git rev-parse --abbrev-ref HEAD     # ...y que sea la rama del Requerimiento
+     ```
+
+     Si los dos primeros no coinciden, o el tercero no es la rama que devolvió el
+     paso 4: **pará y decíselo al usuario.** No mandes el PATCH a `pr_open` — la API
+     lo va a rechazar igual, y con razón: pedir el merge de algo que no está pusheado
+     deja la tarjeta afirmando un trabajo que nadie puede ver.
+5.5. **Chequeo de alcance, antes de abrir el PR.** Corré `git log dev..<rama> --oneline` —
+   ahí tienen que estar **tus commits de este Requerimiento y ninguno más**; si aparece uno
+   de otra tarjeta, la rama está apilada (paso 4.1) y hay que rehacerla. Después
+   `git diff dev...<rama> --stat` y
    pasá los archivos contra la descripción del Requerimiento. **Lo que no puedas explicar
    señalando esa descripción, o entra en `observations` como el mínimo necesario, o sale
    del Pull Request** (a otra rama, o se descarta). El PR viaja entero: el Scrum Master lo
@@ -482,52 +632,224 @@ una sola vez y no se reinicia.
       exactamente lo que tiene que pasar — el reloj sigue corriendo porque el trabajo sigue.
       Arreglar después del PR le carga esas horas a nadie y deja al Scrum Master mergeando
       algo que no pasa sus propias pruebas.
-   4. **Dejá la documentación respaldatoria en el repo**, en el mismo commit: qué hace lo
-      que implementaste y cómo se verifica. Si el Requerimiento no tiene código (una No
-      Funcional de política o configuración), el documento **es** la entrega.
+   4. **Las pruebas de la app son DOS juegos, y los dos son tuyos de preparar.** Cada
+      condición de aprobación deja dos Tests cargados, y en la pestaña "Pruebas" se ven
+      separados:
 
-   5. **Preguntale al usuario si lo damos por terminado, y esperá la respuesta.** Con la
-      suite corrida, mostrale el resultado y pedí la confirmación en una sola pregunta:
+      | Etapa | La corre | Dónde | Contra qué |
+      |---|---|---|---|
+      | **Del programador** (`desarrollo`) | vos | la rama del Requerimiento | tu máquina, con datos fijos |
+      | **De QA** (`integracion`) | QA | `dev`, con todo mergeado | el entorno desplegado |
 
-      > Corrí las pruebas de `<Requerimiento>`: **N pasaron, M fallaron**. Implementé
-      > `<qué>` y documenté `<dónde>`. ¿Está todo bien? Si me decís que sí, abro el Pull
-      > Request y paso la tarjeta a **Hecho**, que **corta el reloj** (ahora lleva `<Xh Ym>`
-      > y deja de contar).
+      **Las de `desarrollo` las corrés y las dejás en verde.** Son tuyas de punta a punta:
+      aisladas, con el contexto hardcodeado que haga falta (un usuario semilla, un registro
+      fijo, un mock del servicio de al lado). Que dependan de datos fijos no es una
+      trampa — es lo que las hace repetibles en una rama donde todavía no hay nada más.
 
-      El tiempo que va a quedar congelado se arma con dos campos de
-      `GET /api/v1/projects/$PROJECT_ID/requirements`: **`real`** es lo acumulado hasta el
-      último corte, y **`timerStartedAt`** es cuándo arrancó el tramo que está corriendo
-      ahora. Sumale a `real` lo que va de `timerStartedAt` hasta este momento — `real` solo
-      es el número viejo, porque recién se escribe al congelar. Si `timerStartedAt` viene en
-      `null`, el reloj ya estaba parado y no hay nada que cortar: decilo así.
+      **Las de `integracion` las dejás PREPARADAS, no las corrés.** No podés: en tu rama no
+      hay integración que probar. Preparadas significa con sus pasos escritos, sus datos
+      reales indicados y el resultado esperado claro, de modo que QA las abra y le dé
+      correr. Dejarlas vacías para que QA las redacte es devolverle el trabajo de entender
+      lo que vos ya entendiste.
 
-      - **Sí** → seguí con el paso 6 (PR) y el 7 (`pr_open`).
-      - **No**, o pide cambios, o no contesta → **no abras el PR y no mandes `pr_open`**. La
-        tarjeta se queda en `doing` con el reloj corriendo, que es la verdad: el trabajo
-        sigue. Seguís con lo que te pida.
-      - **Con la suite en rojo**, la pregunta cambia: primero decile qué está fallando y
-        ofrecé corregirlo. Si aun así te pide abrir el PR, es su decisión y se la respetás,
-        pero **dejando dicho en `observations` qué quedó fallando** -- no lo escondas.
+      **Y con su bloque `verification` completo, siempre**: `endpointUrl`, `notes` y los
+      `steps` en orden, con método, URL (usando `{{baseUrl}}`), body y `expectedStatus`. Un
+      Test sin pasos es un título: nadie lo puede correr, ni vos ni QA, y en la app aparece
+      como una fila que no se puede verificar.
 
-      Esta confirmación no se saltea aunque el usuario haya dicho "hacé todo" al principio:
-      es la única acción de este skill que **congela el reloj**, y una vez congelado el
-      tiempo que se siga trabajando no se lo cobra nadie.
+      **Apenas la suite local pasa, marcá los de `desarrollo` como Aprobados**
+      (`PATCH /api/v1/tests/<id>` con `{"status":"Aprobado"}`). No lo dejes para después:
+      el tablero calcula el avance con eso (`progress` = aprobados/total), así que un Test
+      que pasó y quedó en Pendiente hace que la tarjeta muestre menos de lo que hay hecho.
+
+      **Los de `integracion` quedan en Pendiente, siempre.** Marcarlos Aprobado desde tu
+      rama es afirmar que algo funciona integrado sin haberlo visto integrado. Son de QA.
+
+      Una condición sin Test es una condición que sólo vos podés afirmar, y eso no es una
+      entrega: es una promesa. Si alguna no se puede traducir a pasos HTTP (es de pantalla,
+      o de configuración), cargá el Test igual con los pasos manuales en `description` y
+      `expectedResult` — que QA sepa QUÉ mirar y CÓMO, aunque lo haga a ojo.
+
+   4.2. **Y el script, que es lo que QA no puede escribir por vos.** Un archivo ejecutable
+      en `scrumDocs/entregas/<CODIGO>.sh`, commiteado, que se corra con un comando y sin
+      configurar nada:
+
+      ```bash
+      bash scrumDocs/entregas/RF-03.sh                  # el recorrido completo, integrado
+      bash scrumDocs/entregas/RF-03.sh --carga 200      # el mismo recorrido, 200 veces
+      ```
+
+      Tiene que hacer tres cosas:
+
+      1. **Preparar sus datos y limpiarlos al terminar.** Si deja basura, la segunda
+         corrida da distinto que la primera y nadie sabe si eso es el sistema o el script.
+      2. **Recorrer el flujo completo integrado**, no tu pedazo: si tu Requerimiento es el
+         login, el script registra, entra, hace algo autenticado y sale. Ahí es donde
+         aparece lo que tu rama no podía ver.
+      3. **Aceptar un modo de carga** (`--carga N`): el mismo recorrido repetido, midiendo
+         y reportando. No hace falta una herramienta de estrés — un `for` con `curl` y un
+         promedio alcanza. Lo que importa es el **número**: cuántas corridas, cuántas
+         fallaron, cuánto tardó la más lenta.
+
+      Usá lo que el repo ya tenga (k6, autocannon, pytest, lo que sea) antes de sumar una
+      dependencia. Si el Requerimiento no tiene endpoints, el script comprueba lo que
+      corresponda —que el servicio levanta, que la configuración está aplicada— y lo dice.
+
+      **El script es del programador porque conoce los datos que hacen falta.** QA sabe qué
+      hay que verificar; vos sabés con qué. Escribirlo es lo que convierte tu entrega en
+      algo que otro puede correr.
+
+   5. **Dejá el documento de entrega en el repo**, en el mismo commit. No es "documentación"
+      en abstracto: es lo que QA va a leer para poder probar sin preguntarte nada. Cinco
+      cosas, en `scrumDocs/entregas/<CODIGO>.md` (ej. `scrumDocs/entregas/RF-03.md`):
+
+      1. **Qué quedó implementado**, en una o dos frases, en lenguaje de lo que el sistema
+         ahora hace — no de los archivos que tocaste.
+      2. **Cómo se levanta y cómo se prueba**: los comandos exactos, copiables. Si hace
+         falta una variable de entorno, un servicio o una migración, va acá con su valor de
+         ejemplo.
+      3. **Qué datos hacen falta**: usuario y rol con el que entrar, registros previos,
+         cualquier precondición. Si QA tiene que crear algo antes, decilo con los pasos.
+      4. **Qué endpoints o pantallas toca**, con método y ruta. Es lo que le permite a QA
+         armar sus propios casos además de los tuyos.
+      4.5. **Cómo se corre integrado**: el comando del script del paso 4.2, qué datos deja,
+         y qué tiene que estar levantado para que funcione.
+      5. **Qué quedó afuera y qué se asumió.** Los límites conocidos, lo que se pospuso, la
+         decisión que tomaste cuando el Requerimiento no lo aclaraba. Esto es lo que evita
+         que QA reporte como defecto algo que fue una decisión.
+
+      Si el Requerimiento no tiene código (una No Funcional de política o configuración),
+      este documento **es** la entrega, y el punto 2 pasa a ser cómo se comprueba que la
+      política está aplicada.
+
+   6. **Todo lo que afirmes acá tiene que ser mensurable.** Ni en las condiciones, ni en el
+      documento de entrega, ni en `observations` entran los adjetivos: "rápido", "seguro",
+      "robusto", "optimizado" no son verificables y nadie puede probarlos ni refutarlos.
+      Van con número y unidad, o no van:
+
+      | No sirve | Así sí |
+      |---|---|
+      | "Mejoré la performance" | "El listado pasó de 4,1 s a 380 ms con 10.000 registros" |
+      | "Quedó seguro" | "La contraseña se guarda con bcrypt, costo 12; el endpoint rechaza sin token con 401" |
+      | "Anda bien en móvil" | "Probado en Chrome Android 14 y Safari iOS 17, viewport 390px" |
+
+      Si algo que implementaste no lo podés medir, decilo tal cual —"esto no lo pude
+      medir"— en vez de adjetivarlo. Un límite declarado es información; un adjetivo es
+      ruido que alguien va a tener que verificar de nuevo.
+
+   4.5. **Recorré las condiciones de aprobación, una por una.** Están en el campo
+      `acceptanceCriteria` **del Requerimiento** (`GET
+      $SCRUM_API_URL/api/v1/projects/$PROJECT_ID/requirements`) y son de esta tarjeta, no
+      de la Historia entera: no hay nada que adivinar sobre cuáles te tocan. Armá una tabla
+      corta: cada condición, si quedó cubierta, y **con qué prueba se demuestra** — el
+      nombre del test que la ejercita, no "sí" a secas.
+
+      | Condición de aprobación | ¿Cubierta? | Cómo se prueba |
+      |---|---|---|
+      | El alta rechaza un email ya registrado y lo dice en pantalla | sí | `test_registro_email_duplicado` |
+      | La contraseña se guarda hasheada, nunca en texto plano | sí | `test_password_no_plana` |
+      | Un alta exitosa deja al usuario logueado | **no** | — |
+
+      **Una condición sin cubrir significa que el Requerimiento NO está terminado**, aunque
+      la suite esté en verde: la suite prueba lo que escribiste, las condiciones dicen lo
+      que había que escribir. Decílo y seguí trabajando, no lo cierres.
+
+      Si el Requerimiento **no tiene condiciones cargadas**, decilo y pará antes de cerrar:
+      sin ellas "listo" es una opinión tuya, y quien revisa no tiene contra qué comparar.
+      Las escriben el Project Manager o el Scrum Master — a vos la API te contesta 403.
+      Ofrecé redactar una propuesta a partir de lo que implementaste para que ellos la
+      visen: **proponerlas no es cargarlas**, y menos aún darlas por cumplidas.
+
+      Si alguna condición resultó imposible, o quedó mal planteada, tampoco la edites: eso
+      se habla. Nombrala en el resumen con lo que encontraste.
+
+   5. **Con las tres cosas de arriba en verde, seguí solo: PR y `pr_open`, sin preguntar.**
+
+      Las tres son: la suite del repo pasa, las condiciones de aprobación están todas
+      cubiertas, y la entrega quedó escrita (documento, script y Tests de integración
+      preparados). Si eso se cumple, tu tramo terminó de verdad y no hay nada que consultar
+      — seguí con el paso 6 (abrir el PR) y el 7 (`pr_open`).
+
+      **Y `pr_open` va apenas el PR existe, no después.** Ese PATCH es el que **congela el
+      reloj**, y el reloj tiene que parar cuando el trabajo para. Dejarlo corriendo
+      mientras alguien contesta un mensaje no protege a nadie: le carga a la tarjeta horas
+      en las que no se trabajó, que es exactamente la mentira que el cronómetro existe para
+      evitar.
+
+      Si **alguna de las tres no se cumple**, no preguntás tampoco: seguís trabajando.
+      La suite en rojo se corrige, la condición sin cubrir se implementa, la entrega que
+      falta se escribe. Sólo se le avisa al usuario cuando hay un **impedimento** que no
+      podés resolver vos (no tenés permiso en el repositorio, falta una credencial, la
+      condición depende de algo que no existe) — y ahí la tarjeta se queda en `doing`, que
+      es la verdad, con el impedimento nombrado.
+
+      La excepción es que el usuario te haya pedido explícitamente que le muestres antes de
+      entregar. Eso se respeta: es su proyecto.
+
+   5.5. **Contá el tiempo que quedó congelado, en el aviso final.** Se arma con dos campos
+      de `GET /api/v1/projects/$PROJECT_ID/requirements`: **`real`** es lo acumulado hasta
+      el último corte, y **`timerStartedAt`** es cuándo arrancó el tramo que venía
+      corriendo. Sumale a `real` lo que va de `timerStartedAt` hasta el momento del
+      `pr_open` — `real` solo es el número viejo, porque recién se escribe al congelar. Si
+      `timerStartedAt` viene en `null`, el reloj ya estaba parado y no hay nada que cortar:
+      decilo así.
+
+      Si la suite quedó en rojo y el usuario **igual** te pidió entregar, es su decisión y
+      se la respetás — pero **dejando dicho en `observations` qué quedó fallando**, no lo
+      escondas.
 
 6. **Abrir el Pull Request contra `dev`** — es el pedido de integración, y es lo último
    que hacés con la rama:
 
+   **Abrilo vos.** No le pases el link al usuario para que lo apriete: es un paso mecánico
+   y es tuyo. En orden, hasta que uno funcione:
+
    ```bash
-   gh pr create --base dev --head <rama> --fill        # o, sin gh instalado:
-   # https://github.com/<owner>/<repo>/compare/dev...<rama>
+   # 1. gh, que es el camino corto y usa la sesión que el usuario ya tiene
+   gh pr create --base dev --head <rama> --fill
+
+   # 2. sin gh: la API de GitHub, con el token que el USUARIO tenga exportado
+   curl -s -X POST "https://api.github.com/repos/<owner>/<repo>/pulls" \
+     -H "Authorization: Bearer $GITHUB_TOKEN" \
+     -H "Accept: application/vnd.github+json" \
+     -d '{"title":"<REQ-id>: <nombre>","head":"<rama>","base":"dev","body":"<qué incluye>"}'
    ```
+
+   **Con el token que el usuario exportó, y con ninguno más.** No salgas a buscar
+   credenciales por el repositorio, el `.env`, la config de git ni el historial de la shell:
+   un token encontrado así casi nunca es el que corresponde a esta persona, y usarlo escribe
+   en GitHub a nombre de otro. Si `$GITHUB_TOKEN` no está y `gh` no está autenticado,
+   **eso es el impedimento**: decilo, dejá el link de fallback
+   (`https://github.com/<owner>/<repo>/compare/dev...<rama>`) y la tarjeta en `doing`.
 
    **No lo mergees vos**, aunque tengas permiso en el repo. El merge a `dev` es del Scrum
    Master (o del Project Manager, que lo cubre): es quien mira que lo que entra junto no se
    rompa entre sí, que es exactamente lo que tu rama aislada no puede ver. Si el PR tiene
    conflictos, resolverlos sí es tuyo, en tu rama.
 
-7. **Con el PR abierto y la confirmación del paso 5.6 en mano, cerrar el tramo** poniendo
-   la tarjeta en `pr_open`:
+   **Este paso no es opcional y no va después del 7.** El PATCH a `pr_open` consulta el
+   proveedor y devuelve `400` si la rama no tiene commits propios o si no hay ningún Pull
+   Request abierto para ella. El estado se llama "PR abierto": sin PR no describe nada, y
+   deja al Scrum Master con una tarjeta en "Hecho" que no tiene qué mergear. Si no podés
+   abrirlo (no tenés permiso en el repositorio, `gh` no está instalado y no hay navegador),
+   **decíselo al usuario y dejá la tarjeta en `doing`** — el reloj sigue corriendo, que es
+   la verdad, y el impedimento se ve.
+
+   El número del PR queda registrado solo: el PATCH del paso 7 lo busca y lo guarda, así
+   que el botón "Mergear a dev" del tablero funciona incluso en repos sin webhook.
+
+   **Si tu rama quedó vieja porque se mergearon otras mientras trabajabas**, ponela al día
+   vos, sin preguntar: `git fetch origin && git rebase origin/dev`. Eso es traer la
+   integración a tu rama, y evita que el PR llegue con conflictos que sólo vos podés
+   resolver.
+
+   Ojo con no confundirlo con lo que el paso 4.1 prohíbe: lo vedado es
+   `git pull --rebase` sobre una rama **recién creada** cuando el push rebota
+   non-fast-forward — ahí el problema no es estar viejo, es estar **parado en el lugar
+   equivocado**, y rebasar replica commits ajenos adentro de tu rama. Rebasar sobre
+   `origin/dev` una rama donde ya venís trabajando es correcto y es tuyo.
+
+7. **Con el PR abierto, cerrar el tramo en el acto** poniendo la tarjeta en `pr_open`:
    ```bash
    cat > /tmp/cuerpo.json <<'JSON'
    {"status":"pr_open","observations":"Implementación completada y verificada"}
@@ -543,10 +865,42 @@ una sola vez y no se reinicia.
    lo cuenta nadie.
    `merged_dev`, `in_testing`, `tested` e `in_production` los fija el repositorio y
    devuelven `400` si los mandás a mano.
-8. Confirmarle al usuario qué Requerimiento quedó eligiendo, en qué rama y en qué estado
-   quedó la tarjeta. El cómputo de tiempo real arrancó con el PATCH a `doing` (o con el
+
+   **Los tres `400` que puede contestar este PATCH, y qué significa cada uno:**
+
+   | Dice | Qué pasó | Qué hacés |
+   |---|---|---|
+   | *"el pedido de merge sale de `doing`"* | La tarjeta nunca estuvo en Haciendo | Mandá `{"status":"doing"}` primero. Si el trabajo ya está hecho, decilo: el reloj va a contar sólo desde ahora |
+   | *"no tiene ningún commit propio"* | La rama está vacía: no se pusheó nada | Volvé al paso 5. Casi siempre commiteaste en otra rama, o no tenés permiso de escritura en el repositorio — eso último es un impedimento real, no algo que se resuelva reintentando |
+   | *"no hay ningún Pull Request abierto"* | Falta el paso 6 | Abrí el PR con el link que trae el propio error, y volvé a mandar el PATCH |
+   | *"trae N commit(s) de otro Requerimiento"* | La rama está apilada sobre otra tarjeta (paso 4.1). El error nombra cada commit y a qué Requerimiento pertenece | Rehacé la rama desde la de integración con tus commits solamente: `git checkout -B <rama> origin/dev`, `git cherry-pick <tus shas>`, `git push --force-with-lease`. **Decíselo al usuario antes**: reescribe la rama |
+
+   Ninguno de los tres es un problema de la key ni del endpoint: **no los reintentes con
+   otro cuerpo ni con otra credencial.** Son hechos de git que faltan.
+8. **Avisá qué quedó hecho, con los cinco datos que importan**: qué Requerimiento,
+   en qué rama, las pruebas en verde (cuántas), el Pull Request abierto (con su link), y
+   el cronómetro detenido con el tiempo que quedó registrado. Es un informe de lo hecho, no
+   un pedido de permiso. El cómputo de tiempo real arrancó con el PATCH a `doing` (o con el
    primer push, lo que haya pasado antes) y se congela solo al pasar a `pr_open` -- no
    hay nada que tenga que "parar" a mano.
+
+9. **Y ahí termina este Requerimiento. Ofrecé el siguiente, no lo empieces.** Decí cuál
+   sería (con el mismo criterio del paso 2) y preguntá si arrancamos. Esperá la respuesta.
+
+   El que proponés no tiene por qué ser el próximo de la fila: si el que sigue está
+   bloqueado, o lo tiene otra persona, o depende de algo que todavía no existe, proponé uno
+   posterior que se pueda empezar hoy y decí por qué lo salteaste. El orden manda mientras
+   no cueste tiempo muerto.
+
+   **No vuelvas al paso 1 por tu cuenta**, aunque el usuario haya dicho "hacé todos los
+   requerimientos" al principio y aunque el siguiente parezca obvio. Entre un Requerimiento
+   y el que sigue hay cosas que no pasan en esta corrida y que el humano necesita poder
+   hacer: leer el Pull Request, correrlo él mismo, cambiar de opinión sobre el orden. Si
+   arrancás solo, la primera vez que se entera es cuando ya hay cinco ramas abiertas.
+
+   La única excepción es que el usuario, viendo el Requerimiento cerrado y el siguiente
+   propuesto, te diga que sigas. Eso es una validación, que es justo lo que se estaba
+   pidiendo.
 
 ---
 
@@ -555,11 +909,33 @@ una sola vez y no se reinicia.
 - Nunca crear un Requerimiento (paso 4.5) sin haberle confirmado antes al usuario nombre,
   tipo e Historia de Usuario destino, y sin haber recibido una confirmación explícita --
   a diferencia de actualizar uno existente, crear de más ensucia el backlog.
-- **Nunca mandes `pr_open` sin preguntarle antes al usuario si lo damos por terminado**
-  (paso 5.6.5), y sin haber corrido las pruebas para que esa respuesta signifique algo.
-  `pr_open` congela el reloj: lo que se trabaje después de ese PATCH no lo cuenta nadie.
-  Vale lo mismo que la confirmación para crear o borrar -- es una acción que el usuario no
-  puede deshacer con otra corrida.
+- **Nunca mandes `pr_open` sin que exista el Pull Request y sin la suite en verde** (paso
+  5.6.5). `pr_open` congela el reloj: mandarlo antes de terminar le regala horas a la
+  tarjeta, y mandarlo sin PR deja al Scrum Master con algo en "Hecho" que no tiene qué
+  mergear.
+- **Nunca frenes a pedirle al usuario un paso de git, de GitHub o una transición de estado
+  que podés resolver vos.** Crear la rama, commitear, pushear, abrir el PR, mover la
+  tarjeta: todo eso es tuyo. Lo único que se le lleva al usuario es un impedimento real o
+  una decisión que no te corresponde.
+- **Nunca arranques un Requerimiento nuevo sin que el usuario haya validado el anterior**
+  (paso 9). "Hacé todo" autoriza el trabajo, no saltea la revisión de cada pieza. Eso es
+  sobre la validación, no sobre el orden: cuál encarar después lo elige el usuario, y
+  adelantarse a un Requerimiento posterior porque el anterior está trabado es una decisión
+  razonable que vos mismo podés proponer.
+- **Nunca cierres un Requerimiento con una condición de aprobación sin cubrir**
+  (paso 5.6.4.5), por más que la suite esté en verde: la suite prueba lo que escribiste,
+  las condiciones dicen lo que había que escribir.
+- **Nunca corras vos los Tests de etapa `integracion`** ni los marques Aprobados: en tu
+  rama no hay integración que probar, así que un verde ahí es una afirmación sin respaldo.
+  Los preparás; los corre QA sobre `dev`.
+- **Nunca entregues sin el documento de entrega, sin los Tests cargados ni sin el script**
+  (pasos 5.6.4, 5.6.4.2 y 5.6.5). Son lo que QA necesita para probar sin preguntarte: sin eso, la validación no es
+  una etapa del proceso sino una conversación, y la conversación no queda en ningún lado.
+- **Nunca uses un adjetivo donde va un número** (paso 5.6.6). "Rápido" no se puede probar
+  ni refutar; "380 ms con 10.000 registros" sí.
+- **Nunca escribas ni edites `acceptanceCriteria`**: son de quien define el alcance (PM y
+  Scrum Master), y la API te contesta 403. Proponerlas cuando faltan, sí; darlas por
+  cumplidas o corregirlas para que cierren, no -- eso es moverse el arco.
 - Nunca inventar una Historia de Usuario para colgar un Requerimiento nuevo -- si no hay
   ninguna razonable, avisar y no crear el Requerimiento suelto.
 - Nunca marcar `isAutoGenerated`/crear un Test sin evidencia real de que existe en el
