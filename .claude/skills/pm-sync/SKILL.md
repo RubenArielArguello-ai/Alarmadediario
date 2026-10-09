@@ -110,16 +110,47 @@ Todo va con `-d @/tmp/cuerpo.json` (ver la sección 5 de `scrumDocs/EMPEZA-ACA-S
 el JSON en línea se rompe con los apóstrofes del castellano).
 
 ```bash
-# Historia de Usuario
+cat > /tmp/cuerpo.json <<'JSON'
+{
+  "name": "Nombre de la historia",
+  "description": "Como [rol] quiero [acción] para [beneficio]",
+  "kind": "historia",
+  "acceptanceCriteria": "1. Dado [contexto] cuando [acción] entonces [resultado]\n2. Criterio 2..."
+}
+JSON
+
 curl -s -X POST "$SCRUM_API_URL/api/v1/projects/$PROJECT_ID/user-stories" \
   -H "Authorization: Bearer $SCRUM_API_KEY" -H "Content-Type: application/json" \
-  -d @/tmp/cuerpo.json          # { "name": "...", "description": "...", "kind": "historia" }
+  -d @/tmp/cuerpo.json
+```
 
+`acceptanceCriteria` **es obligatorio y la API lo valida**: una Historia sin criterios (o
+con menos de 10 caracteres, o sin ninguna condición parseable) se rechaza con
+`400 {"error":"acceptanceCriteria es requerido para crear una Historia de Usuario"}`. Van
+como UN solo string, un criterio por línea con `\n` — nunca un array, y nunca "los cargo
+después": no hay después, la Historia no se crea.
+
+```bash
 # Requerimiento adentro de esa Historia
 curl -s -X POST "$SCRUM_API_URL/api/v1/user-stories/$USER_STORY_ID/requirements" \
   -H "Authorization: Bearer $SCRUM_API_KEY" -H "Content-Type: application/json" \
-  -d @/tmp/cuerpo.json          # { "name": "...", "description": "...", "type": "funcional" }
+  -d @/tmp/cuerpo.json
 ```
+
+```json
+{
+  "name": "Nombre del Requerimiento",
+  "description": "Qué hay que implementar",
+  "type": "funcional",
+  "acceptanceCriteria": "1. El alta rechaza un email ya registrado y lo dice en pantalla\n2. La contraseña se guarda hasheada, nunca en texto plano"
+}
+```
+
+`acceptanceCriteria` **es obligatorio** al crear un Requerimiento (salvo dentro de un
+contenedor operacional): son las condiciones que dicen cuándo está terminado, la app
+**deriva de ellas dos Tests por condición** (uno de `desarrollo` para el programador y uno
+de `integracion` para QA), y el paso a "Hecho" exige que cada condición tenga un Test
+aprobado. Sin ellas, el alta contesta `400` y el developer queda trabado al final.
 
 **El trabajo que no nace de una Historia de Usuario va como operacional** (`kind:
 "operacional"`): la VM donde va a correr `testing` para que QA valide, la de `tested` para
