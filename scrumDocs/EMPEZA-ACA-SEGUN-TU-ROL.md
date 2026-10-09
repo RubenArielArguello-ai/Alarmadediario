@@ -1,6 +1,6 @@
 # Empezá acá: este repo está conectado a Scrum Master AI
 
-_Generado automáticamente el 2026-09-24T19:57:42.480Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-10-09T14:41:38.740Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Si el usuario te pidió leer la documentación de este proyecto, o arrancó una conversación
 sobre "qué sigue", "cargar requerimientos", "sincronizar tests", "reportar avance" o
@@ -131,6 +131,13 @@ curl -s -X POST "$SCRUM_API_URL/api/v1/user-stories/$USER_STORY_ID/requirements"
 
 Un salto de línea dentro de un valor va como `\n`, nunca literal. Los criterios de
 aceptación y las listas de pasos son un solo string con `\n`, no un array.
+
+**Toda Historia de Usuario DEBE crearse con sus criterios de aceptación desde el primer
+momento; no se admiten Historias con criterios pendientes o en null.** La API lo valida:
+`POST .../user-stories` con `kind: "historia"` y sin `acceptanceCriteria` contesta
+`400 {"error":"acceptanceCriteria es requerido para crear una Historia de Usuario"}`, y un
+PATCH que los vacíe se rechaza igual. Si quien dicta no los dio, proponéselos a partir de
+lo que dijo y que los valide — nunca cargues la Historia "para completarlos después".
 
 Qué te está diciendo cada error, para no corregir lo que no es:
 
