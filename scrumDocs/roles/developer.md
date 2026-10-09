@@ -1,6 +1,6 @@
 # Developer — qué podés hacer en este proyecto
 
-_Generado automáticamente el 2026-09-24T19:57:38.985Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-10-09T14:41:34.413Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Este es el documento de **tu** rol. Lo leés vos (la IA que asiste a un `developer`) y nadie
 más: los otros roles tienen el suyo en `scrumDocs/roles/`. El procedimiento paso a paso
@@ -80,15 +80,25 @@ Son tres cosas distintas y ninguna reemplaza a otra:
   un verde ahí es una afirmación sin respaldo. Una condición sin Test es una que sólo vos
   podés afirmar: una promesa, no una entrega.
 - **Documentado, y con el script.** Un archivo por Requerimiento en
-  `scrumDocs/entregas/<CODIGO>.md`: qué quedó implementado, cómo se levanta y se prueba
+  `docs/pruebas/<historia>/<CODIGO>-entrega.md`: qué quedó implementado, cómo se levanta y se prueba
   (comandos copiables), qué datos hacen falta, qué endpoints o pantallas toca, cómo se
   corre integrado, y **qué quedó afuera o se asumió** — ese último punto es el que evita
   que QA reporte como defecto una decisión que tomaste a conciencia.
 
-  Y al lado, `scrumDocs/entregas/<CODIGO>.sh`: un ejecutable que recorre el flujo completo
+  Y al lado, `docs/pruebas/<historia>/<CODIGO>-entrega.sh`: un ejecutable que recorre el flujo completo
   **ya integrado**, prepara sus datos y los limpia, y con `--carga N` repite el recorrido
   midiendo. Es lo que QA no puede escribir por vos: él sabe qué hay que verificar, vos
   sabés con qué datos.
+
+Esto ya no es sólo la vara escrita: **el paso a "Hecho" lo exige**. El PATCH a `pr_open`
+contesta `400` si el Requerimiento no tiene condiciones de aprobación, si no tiene ningún
+Test cargado, si alguna condición no tiene al menos un Test **Aprobado** apuntándole, si
+algún Test no apunta a ninguna condición, o si algún Aprobado no dice con qué se aprobó
+(`evidence`). El error nombra qué falta, condición por condición. Alcanza con el Test de
+etapa `desarrollo`: el de `integracion` queda pendiente a propósito, lo corre QA sobre
+`dev`.
+
+**Cómo se redacta cada Test está en `scrumDocs/ESTANDAR-DE-PRUEBAS.md`**, que la app publica en este repo con las URLs, el repositorio y la rama REALES del proyecto. Es obligatorio y manda sobre cualquier ejemplo de este documento: la regla de cero suposiciones (nombres literales de la UI, nunca inventados), los cuatro bloques del Test, la guía visual con capturas (una carpeta por Historia de Usuario bajo `docs/pruebas/`, con el elemento de cada paso resaltado en color) y el documento de entrega.
 
 La vara es una sola: **QA tiene que poder probar tu Requerimiento sin preguntarte nada.**
 Si para validarlo hace falta una conversación con vos, la entrega está incompleta — y esa
@@ -195,7 +205,9 @@ hay primer push, sin push el reloj no arranca y el tablero no se entera de nada.
 tarjeta a mano tapa el síntoma y deja el tiempo real en cero para siempre.
 
 **El nombre de la rama lo pone la app, no vos.** El endpoint lo arma como
-`feature/<módulo>/<id>-<nombre>` y lo guarda en el Requerimiento: es el único nombre que el
+`feature/<historia>/<id>-<nombre>` —la rama vive en la carpeta de su Historia de Usuario, así
+no quedan cientos de ramas sueltas en un solo cajón: `feature/hu-03-plataforma-de-datos/`—
+y lo guarda en el Requerimiento: es el único nombre que el
 webhook reconoce y el único que el Scrum Master va a buscar para mergear. Una rama que
 elegiste vos —`feature/hu-01-login`, por más prolija que sea— es invisible para el tablero:
 podés commitear, pushear, abrir el PR y hasta que te lo mergeen, y la tarjeta no se mueve.
@@ -338,7 +350,7 @@ código → pruebas en verde → documentación → «¿lo damos por terminado?�
 | `GET` | `/api/v1/projects/[id]/modules` | Los Módulos del proyecto. |
 | `GET` | `/api/v1/projects/[id]/requirements` | Todos los Requerimientos del proyecto con su estado, asignado, estimación y dependencias. |
 | `GET` | `/api/v1/projects/[id]/user-stories` | Historias de Usuario y contenedores operacionales, con sus Requerimientos colgando. |
-| `PATCH` | `/api/v1/requirements/[id]` | Editar un Requerimiento: mover la tarjeta, asignar, estimar, anotar observaciones, agendar. Qué campos podés tocar depende del rol, y el developer sólo sobre lo que tiene asignado. Ver la sección "Campos" de este documento. `integrantes` es la lista COMPLETA de las personas afectadas a la actividad además del responsable (ids o nombres de usuario): se manda entera, así que sacar a alguien es mandarla sin esa persona. Es información de agenda para el Grafo y no le da ningún permiso sobre el Requerimiento. |
+| `PATCH` | `/api/v1/requirements/[id]` | Editar un Requerimiento: mover la tarjeta, asignar, estimar, anotar observaciones, agendar. Pasar a `pr_open` ("Hecho") exige, para el developer: haber pasado por `doing`, tener rama con commits, y que CADA condición de aprobación tenga al menos un Test APROBADO con su evidencia y ningún Test suelto -- si no, 400 nombrando lo que falta. Qué campos podés tocar depende del rol, y el developer sólo sobre lo que tiene asignado. Ver la sección "Campos" de este documento. `integrantes` es la lista COMPLETA de las personas afectadas a la actividad además del responsable (ids o nombres de usuario): se manda entera, así que sacar a alguien es mandarla sin esa persona. Es información de agenda para el Grafo y no le da ningún permiso sobre el Requerimiento. |
 | `DELETE` | `/api/v1/requirements/[id]/block` | Destrabar: saca el candado y devuelve la tarjeta al estado anterior. |
 | `POST` | `/api/v1/requirements/[id]/block` | Bloquear un Requerimiento con motivo escrito y responsable. Congela el reloj. Cualquier miembro bloquea: el impedimento lo encuentra quien lo encuentra. `esRechazo: true` (review que pide cambios) es sólo del PM y del Scrum Master. |
 | `POST` | `/api/v1/requirements/[id]/claim` | Tomar para vos un Requerimiento libre, o quitárselo a otro developer. Si mandás `status: doing` por PATCH sobre uno sin asignar, la toma es automática y este POST no hace falta. |
