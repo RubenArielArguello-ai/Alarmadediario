@@ -1,6 +1,6 @@
 # Product Owner — qué podés hacer en este proyecto
 
-_Generado automáticamente el 2026-09-24T19:57:37.430Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-10-09T14:41:31.844Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Este es el documento de **tu** rol. El procedimiento paso a paso está en
 `.claude/skills/po-sync/SKILL.md`.
@@ -34,6 +34,28 @@ permite al developer saber cuándo terminó y a QA saber qué probar. Si no los 
 escritos, que te los propongan a partir de lo que dictaste y corregilos — pero que la
 Historia no se cargue sin ellos.
 
+Eso ya no es sólo una recomendación: **la API lo valida**. El alta de una Historia sin
+`acceptanceCriteria` (o con menos de 10 caracteres, o sin ninguna condición parseable)
+contesta `400 {"error":"acceptanceCriteria es requerido para crear una Historia de
+Usuario"}`, y vaciarlos por PATCH se rechaza igual. Así se manda el alta:
+
+```bash
+cat > /tmp/cuerpo.json <<'JSON'
+{
+  "name": "Nombre de la historia",
+  "description": "Como [rol] quiero [acción] para [beneficio]",
+  "kind": "historia",
+  "acceptanceCriteria": "1. Dado [contexto] cuando [acción] entonces [resultado]\n2. Criterio 2..."
+}
+JSON
+
+curl -s -X POST "$SCRUM_API_URL/api/v1/projects/$PROJECT_ID/user-stories" \
+  -H "Authorization: Bearer $SCRUM_API_KEY" -H "Content-Type: application/json" \
+  -d @/tmp/cuerpo.json
+```
+
+Los criterios van en UN solo string, uno por línea separados con `\n` — nunca un array.
+
 ## Qué escribís del Requerimiento
 
 Este rol **no escribe ningún campo** del Requerimiento: un `PATCH` responde 403. Su trabajo entra por otras rutas (ver los endpoints de más abajo).
@@ -50,12 +72,12 @@ Este rol **no escribe ningún campo** del Requerimiento: un `PATCH` responde 403
 | `GET` | `/api/v1/projects/[id]/modules` | Los Módulos del proyecto. |
 | `GET` | `/api/v1/projects/[id]/requirements` | Todos los Requerimientos del proyecto con su estado, asignado, estimación y dependencias. |
 | `GET` | `/api/v1/projects/[id]/user-stories` | Historias de Usuario y contenedores operacionales, con sus Requerimientos colgando. |
-| `POST` | `/api/v1/projects/[id]/user-stories` | Crear una Historia de Usuario (`kind: "historia"`) o un **Requerimiento operacional** (`kind: "operacional"`): el trabajo real que no nace de una Historia — levantar la VM donde va a correr `testing`, preparar la de producción, una capacitación, una auditoría, una reunión con el cliente. El Product Owner sólo `historia`; el **Scrum Master sólo `operacional`**; el PM las dos. El operacional nace con su primer Requerimiento adentro, así que `estimated` y `assignee` del cuerpo van a ese hijo. |
+| `POST` | `/api/v1/projects/[id]/user-stories` | Crear una Historia de Usuario (`kind: "historia"`) o un **Requerimiento operacional** (`kind: "operacional"`): el trabajo real que no nace de una Historia — levantar la VM donde va a correr `testing`, preparar la de producción, una capacitación, una auditoría, una reunión con el cliente. `acceptanceCriteria` es OBLIGATORIO cuando `kind` es `historia`: sin criterios (o con menos de 10 caracteres) contesta 400. No existe la Historia con criterios pendientes. El Product Owner sólo `historia`; el **Scrum Master sólo `operacional`**; el PM las dos. El operacional nace con su primer Requerimiento adentro, así que `estimated` y `assignee` del cuerpo van a ese hijo. |
 | `DELETE` | `/api/v1/requirements/[id]/block` | Destrabar: saca el candado y devuelve la tarjeta al estado anterior. |
 | `POST` | `/api/v1/requirements/[id]/block` | Bloquear un Requerimiento con motivo escrito y responsable. Congela el reloj. Cualquier miembro bloquea: el impedimento lo encuentra quien lo encuentra. `esRechazo: true` (review que pide cambios) es sólo del PM y del Scrum Master. |
 | `GET` | `/api/v1/requirements/[id]/tests` | Los Tests de un Requerimiento, con su estado y su resultado. |
 | `DELETE` | `/api/v1/user-stories/[id]` | Borrar una Historia de Usuario o un Requerimiento operacional con todo lo que cuelga. Mismo reparto por `kind` que el POST. |
-| `PATCH` | `/api/v1/user-stories/[id]` | Editar una Historia de Usuario o un Requerimiento operacional. Mismo reparto por `kind` que el POST. Renombrar un operacional que tiene un solo hijo le propaga el nombre. Los campos de ejecución (fechas, Entrega) los escribe sólo el PM. |
+| `PATCH` | `/api/v1/user-stories/[id]` | Editar una Historia de Usuario o un Requerimiento operacional. Mismo reparto por `kind` que el POST. Vaciar `acceptanceCriteria` de una Historia se rechaza con 400: para no tocarlos, no mandes la clave. Renombrar un operacional que tiene un solo hijo le propaga el nombre. Los campos de ejecución (fechas, Entrega) los escribe sólo el PM. |
 
 Los tres primeros son los que usás todo el tiempo: crear, editar y borrar Historias
 (`kind: historia`). Los contenedores operacionales — capacitaciones, auditorías, tareas sin
