@@ -1,6 +1,6 @@
 ---
 name: qa-sync
-description: Ayuda al Tester/QA a redactar, correr y certificar los Tests de integración desde el IDE -- mantiene scrumDocs/tests-manifest.json leyendo el código real del proyecto, los sincroniza con los Requerimientos de Scrum Master AI vía la API, y registra el veredicto con la evidencia de lo que se corrió. Solo toca Tests -- nunca Requerimientos, Historias de Usuario ni ramas. Usar cuando el usuario pide "armar tests de este endpoint", "sincronizar tests", "correr los tests de QA", "certificar el requerimiento", "cargar los casos de prueba", o corre /qa-sync explícitamente.
+description: Ayuda al Tester/QA a redactar, correr y certificar los Tests de integración desde el IDE -- mantiene scrumDocs/tests-manifest.json leyendo el código real del proyecto, los sincroniza con las Tareas de Scrum Master AI vía la API, y registra el veredicto con la evidencia de lo que se corrió. Solo toca Tests -- nunca Tareas, Historias de Usuario ni ramas. Usar cuando el usuario pide "armar tests de este endpoint", "sincronizar tests", "correr los tests de QA", "certificar la tarea", "cargar los casos de prueba", o corre /qa-sync explícitamente.
 user-invocable: true
 allowed-tools:
   - Read
@@ -14,7 +14,7 @@ allowed-tools:
 
 Ayuda a un Tester o QA a mantener `scrumDocs/tests-manifest.json` (el formato de tests de
 endpoint que ya corre la app desde "Verificación en vivo" y el botón "Correr todos") y
-sincronizarlo con los Requerimientos de Scrum Master AI. A diferencia de escribir eso a
+sincronizarlo con las Tareas de Scrum Master AI. A diferencia de escribir eso a
 mano, este skill lee el **código real de este repo** (rutas, controllers, serializers)
 para proponer pasos que apuntan a endpoints que efectivamente existen — con método, body
 y código esperado reales, no inventados.
@@ -22,19 +22,19 @@ y código esperado reales, no inventados.
 **Cómo se redacta cada Test está en `scrumDocs/ESTANDAR-DE-PRUEBAS.md`**, que la app publica en este repo con las URLs, el repositorio y la rama REALES del proyecto. Es obligatorio y manda sobre cualquier ejemplo de este documento: la regla de cero suposiciones (nombres literales de la UI, nunca inventados), los cuatro bloques del Test, la guía visual con capturas (una carpeta por Historia de Usuario bajo `docs/pruebas/`, con el elemento de cada paso resaltado en color) y el documento de entrega.
 
 **Alcance deliberadamente angosto**: sólo Tests (`name`, `type`, `preconditions`,
-`expectedResult`, `criterionIndex`, `verification.steps`) y su veredicto. Lee los
-Requerimientos para saber a cuál colgar cada test, pero nunca los crea ni edita — igual que
-`/po-sync` no crea Historias de Usuario, este skill no crea Requerimientos. Tampoco toca
+`expectedResult`, `criterionIndex`, `verification.steps`) y su veredicto. Lee las
+Tareas para saber a cuál colgar cada test, pero nunca los crea ni edita — igual que
+`/po-sync` no crea Historias de Usuario, este skill no crea Tareas. Tampoco toca
 tiempos, asignado, dependencias ni ramas — la API lo rechaza (403) si se intenta, es
 territorio de developer/Project Manager.
 
-El **estado del Requerimiento sí se mueve**, pero nunca a mano: lo mueve el resultado de los
+El **estado de la Tarea sí se mueve**, pero nunca a mano: lo mueve el resultado de los
 Tests. Marcar todos los Tests aprobados, con su evidencia y con todas las condiciones
 cubiertas, es lo que lo deja en `tested`.
 
-Argumentos: `$ARGUMENTS` — opcionalmente el código de un Requerimiento puntual (ej.
+Argumentos: `$ARGUMENTS` — opcionalmente el código de una Tarea puntual (ej.
 `RF-03`) para enfocar el trabajo en uno solo, o una ruta de código a inspeccionar (ej. un
-archivo de rutas). Sin argumentos, trabaja sobre todos los Requerimientos del proyecto.
+archivo de rutas). Sin argumentos, trabaja sobre todas las Tareas del proyecto.
 
 ---
 
@@ -45,7 +45,7 @@ contradicen, manda el documento del rol.
 
 ## La cadencia: de a una, validada antes de la siguiente
 
-**Este skill no procesa lotes.** **Cada Requerimiento** se trabaja de a una: se deja terminada, se le
+**Este skill no procesa lotes.** **Cada Tarea** se trabaja de a una: se deja terminada, se le
 muestra al usuario, él la valida, y **recién ahí** se ofrece la siguiente. Podés encadenar
 varias en la misma corrida — lo que no podés es encadenarlas sin esa validación en el medio.
 
@@ -57,12 +57,12 @@ Si aun así te pide que sigas de largo sin validar una por una, es su decisión 
 respetás — pero decíselo primero, con esa consecuencia por delante.
 
 **El orden no lo elegís vos: lo dicta la cadena de dependencias.** No se escribe ni se
-corre el test de un Requerimiento cuyas dependencias todavía no tienen sus tests en verde.
+corre el test de una Tarea cuyas dependencias todavía no tienen sus tests en verde.
 No podés probar el login si no probaste antes la base y el registro: si ese test pasa, no
 sabés si pasó por el login o de casualidad; y si falla, no sabés cuál de las tres cosas
 falló.
 
-Antes de escribir el primer test, ordená los Requerimientos por su cadena (`dependencies`)
+Antes de escribir el primer test, ordená las Tareas por su cadena (`dependencies`)
 y decile al usuario por dónde vas a arrancar y por qué. Si el que te pidieron probar tiene
 dependencias sin probar, decilo y proponé empezar por esas.
 
@@ -138,7 +138,7 @@ curl -s "$SCRUM_API_URL/api/v1/me" -H "Authorization: Bearer $SCRUM_API_KEY"
     varios → listar y preguntar; vacío → avisar que el Project Manager todavía no agregó
     a este usuario a ningún proyecto, y parar. Guardar el elegido en el manifest.
 
-## 2. Traer los Requerimientos existentes
+## 2. Traer las Tareas existentes
 
 ```bash
 curl -s "$SCRUM_API_URL/api/v1/projects/$PROJECT_ID/requirements" \
@@ -149,10 +149,10 @@ curl -s "$SCRUM_API_URL/api/v1/projects/$PROJECT_ID/requirements" \
 proyecto): avisar y parar. `200` → guardar `{ id, code, name, description, type, ... }`
 en memoria.
 
-Si `$ARGUMENTS` es un código (ej. `RF-03`), quedarse sólo con ese Requerimiento.
+Si `$ARGUMENTS` es un código (ej. `RF-03`), quedarse sólo con esa Tarea.
 
 **Ordenalos por su cadena de dependencias antes de escribir un solo test.** Cada
-Requerimiento trae `dependencies` con los ids de los que tienen que estar andando primero.
+Tarea trae `dependencies` con los ids de las que tienen que estar andando primero.
 Armá el orden y arrancá por los que no dependen de nada.
 
 | Situación | Qué hacés |
@@ -171,7 +171,7 @@ Decile al usuario el orden que armaste y por dónde vas a arrancar, antes de esc
 
 ## 2.7. Las condiciones de aprobación son la lista de lo que hay que probar
 
-Cada Requerimiento trae `acceptanceCriteria`: lo que tiene que ser verdad para darlo por
+Cada Tarea trae `acceptanceCriteria`: lo que tiene que ser verdad para darlo por
 terminado, escrito por quien definió el alcance. **De ahí salen los Tests**, no de tu
 criterio sobre qué conviene probar. Una condición, al menos un Test.
 
@@ -179,17 +179,17 @@ Si una condición no se puede traducir a un Test, es una de dos cosas, y las dos
 en vez de saltearlas: o está mal escrita —no se verifica mirando el sistema— o lo que
 describe todavía no está implementado.
 
-Si el Requerimiento no tiene condiciones cargadas, **decilo y no las inventes**: probar
+Si la Tarea no tiene condiciones cargadas, **decilo y no las inventes**: probar
 contra lo que vos suponés que había que hacer es cómo un Test termina certificando algo que
 nadie pidió. Las escriben el Project Manager o el Scrum Master.
 
 ## 2.75. Las tuyas son las de etapa `integracion`
 
-Cada Requerimiento tiene DOS juegos de pruebas, y en la app se ven separados:
+Cada Tarea tiene DOS juegos de pruebas, y en la app se ven separados:
 
 | Etapa | La corre | Dónde |
 |---|---|---|
-| `desarrollo` | el programador | la rama del Requerimiento, aislado, con datos fijos |
+| `desarrollo` | el programador | la rama de la Tarea, aislado, con datos fijos |
 | `integracion` | **vos** | `dev`, con todo mergeado |
 
 **Las de `desarrollo` no son tuyas y no las vuelvas a correr.** Ya están en verde en la
@@ -198,16 +198,16 @@ no agrega información — lo que falta saber es otra cosa.
 
 **Las de `integracion` las dejó preparadas él y las corrés vos**, sobre `dev` y contra el
 entorno desplegado. Ahí es donde aparece lo que la rama aislada no podía ver: que dos
-Requerimientos escriban sobre la misma tabla, que el orden de los migrations importe, que
+Tareas escriban sobre la misma tabla, que el orden de los migrations importe, que
 el servicio de al lado devuelva algo distinto de lo que el mock devolvía.
 
 Si una de integración está vacía o sus pasos no alcanzan para correrla, **decilo nombrando
-el Requerimiento** en vez de redactarla vos: entenderla de nuevo desde el código es el
+la Tarea** en vez de redactarla vos: entenderla de nuevo desde el código es el
 trabajo que el programador ya hizo, y devolvérselo es más barato que repetirlo.
 
 ## 2.8. Lo que el developer te dejó, antes de leer una línea de código
 
-Cada Requerimiento entregado deja dos archivos:
+Cada Tarea entregada deja dos archivos:
 
 - `docs/pruebas/<historia>/<CODIGO>-entrega.md` — qué quedó implementado, cómo se levanta y se prueba,
   qué datos hacen falta, qué endpoints o pantallas toca, **cómo se corre integrado**, y
@@ -221,14 +221,14 @@ Leelo primero: te ahorra reconstruir desde el código lo que ya está escrito, y
 lo asumido es el que evita que reportes como defecto una decisión deliberada.
 
 Si ese documento no está, o no alcanza para probar sin preguntarle al developer, **decilo
-en el resumen final nombrando el Requerimiento**. No es burocracia: la entrega estaba
+en el resumen final nombrando la Tarea**. No es burocracia: la entrega estaba
 incompleta, y si lo resolvés preguntando por chat esa información no queda en ningún lado
 para el próximo que la necesite.
 
 ## 3. Entender el endpoint real leyendo el código
 
 **Esto es lo que diferencia a este skill de escribir el manifest a mano.** Para cada
-Requerimiento (o el que se pasó por argumento), buscá en el código de este repo qué
+Tarea (o la que se pasó por argumento), buscá en el código de este repo qué
 endpoint(s) lo implementan: rutas/urls.py, controllers, routers de la API. Usá Grep/Glob
 para encontrar el archivo de rutas del proyecto y leé el handler correspondiente para
 saber:
@@ -244,7 +244,7 @@ saber:
   (igual que ya se hizo para "recuperar contraseña": un email inventado que no exista,
   para no disparar un mail real) en vez de contra datos reales del sistema.
 
-Si no encontrás el código que implementa un Requerimiento (todavía no está hecho, o no es
+Si no encontrás el código que implementa una Tarea (todavía no está hecho, o no es
 un endpoint HTTP sino una regla de negocio interna), no inventes un test para eso —
 dejalo afuera y reportalo en el resumen final.
 
@@ -276,14 +276,14 @@ originalmente lee este archivo desde el lado del developer):
 ```
 
 - Si el archivo ya existe, agregar o actualizar la entrada de este `requirementCode`
-  (matcheando por `requirementCode` + `title`) sin pisar entradas de otros
-  Requerimientos.
+  (matcheando por `requirementCode` + `title`) sin pisar entradas de otras
+  Tareas.
 - `type`: `Integración` para los pasos contra la API; `Estrés` para un script de carga;
   `Manual` para lo que hay que mirar a ojo. (`Unitario` y `E2E` son del programador.)
 - `criterionIndex`: **a qué condición de aprobación responde este test**, por posición
-  (0 la primera). Sin esto el test no cuenta para la cobertura y el Requerimiento no llega
+  (0 la primera). Sin esto el test no cuenta para la cobertura y la Tarea no llega
   a `tested` aunque esté todo en verde. Una condición, al menos un test que le apunte.
-- `preconditions`: **nombrá el Requerimiento del que depende, por código**, no sólo el
+- `preconditions`: **nombrá la Tarea del que depende, por código**, no sólo el
   estado del sistema. `"RF-01 (registro) probado y en verde; usuario autenticado con rol
   admin"` dice de qué cuelga este test; `"usuario autenticado"` no dice nada de quién lo
   dejó autenticado ni de si eso ya se probó.
@@ -305,7 +305,7 @@ delegarlo:
 - Resolver `requirementCode` contra la lista del paso 2 (por `code`, nunca por nombre).
 - No confiar sólo en el `testId` de `scrumDocs/scrum-manifest.json` para decidir si el test ya
   existe — ese archivo puede faltar, no estar commiteado, o venir de otro clon. Antes de
-  crear, traer los tests que la API ya tiene registrados para este Requerimiento y
+  crear, traer los tests que la API ya tiene registrados para esta Tarea y
   matchear por `title` exacto:
   ```bash
   curl -s "$SCRUM_API_URL/api/v1/requirements/$REQUIREMENT_ID/tests" \
@@ -336,7 +336,7 @@ delegarlo:
 - **Al crear o editar, el test nace `Pendiente`.** El veredicto es el paso 5.5 y va
   aparte: primero se corre, después se certifica.
 - Si la reconciliación contra la API encuentra más de un test con el mismo `title` para el
-  mismo Requerimiento (duplicados de corridas viejas, de antes de que este paso
+  misma Tarea (duplicados de corridas viejas, de antes de que este paso
   existiera), no elegir uno a ciegas: reportarlo en el resumen final para que el Tester
   decida cuál borrar (`DELETE $SCRUM_API_URL/api/v1/tests/$TEST_ID`).
 
@@ -379,7 +379,7 @@ una condición que no prueba.
 **Si falla**, las dos cosas:
 
 1. `Fallido` con la evidencia: el defecto con precisión, para que Desarrollo sepa qué tocar.
-2. Bloqueá el Requerimiento con el motivo escrito:
+2. Bloqueá la Tarea con el motivo escrito:
 
 ```bash
 cat > /tmp/bloqueo.json <<'JSON'
@@ -391,7 +391,7 @@ curl -s -X POST "$SCRUM_API_URL/api/v1/requirements/$REQUIREMENT_ID/block" \
   -d @/tmp/bloqueo.json
 ```
 
-**Si el Requerimiento no pasó a `tested` con todo en verde**, es la cobertura: alguna
+**Si la Tarea no pasó a `tested` con todo en verde**, es la cobertura: alguna
 condición de aprobación no tiene ningún test aprobado apuntándole. Revisá el
 `criterionIndex` de cada uno. Es deliberado — todos los tests en verde no dice nada de las
 condiciones para las que nadie escribió un test.
@@ -400,12 +400,12 @@ condiciones para las que nadie escribió un test.
 
 Reescribir `scrumDocs/tests-manifest.json` completo (viejas entradas + nuevas/actualizadas) y
 `scrumDocs/scrum-manifest.json` con los `testIds` que falten. Reportar, en texto:
-- Cuántos tests se crearon o actualizaron, y para qué Requerimientos.
-- Qué Requerimientos quedaron sin test porque no se encontró el código que los
+- Cuántos tests se crearon o actualizaron, y para qué Tareas.
+- Qué Tareas quedaron sin test porque no se encontró el código que los
   implementa.
 - Cualquier endpoint que requiera un esquema de auth que el test no puede simular
   (para que el Tester sepa que ese paso hay que correrlo con cuidado o a mano).
-- **Qué condiciones de aprobación quedaron sin ningún test aprobado**, por Requerimiento:
+- **Qué condiciones de aprobación quedaron sin ningún test aprobado**, por Tarea:
   es exactamente lo que le falta para llegar a `tested`.
 - Qué tests quedaron en `Pendiente` porque no se pudieron correr, y por qué.
 
@@ -414,9 +414,9 @@ Reescribir `scrumDocs/tests-manifest.json` completo (viejas entradas + nuevas/ac
 ## Notas de implementación
 
 - Nunca inventar un endpoint o un código de estado esperado sin haberlo visto en el
-  código — es preferible dejar un Requerimiento sin test a inventar uno que dé un falso
+  código — es preferible dejar una Tarea sin test a inventar uno que dé un falso
   verde o falso rojo.
-- Nunca crear ni editar Requerimientos ni Historias de Usuario desde este skill.
+- Nunca crear ni editar Tareas ni Historias de Usuario desde este skill.
 - Nunca reintentar con otro shape de body si la API devuelve 403 al tocar un campo de
   ejecución — es intencional, no un error a esquivar.
 - Un `400` pidiendo `evidence` **no se esquiva**: es la API diciendo que falta correr algo.
