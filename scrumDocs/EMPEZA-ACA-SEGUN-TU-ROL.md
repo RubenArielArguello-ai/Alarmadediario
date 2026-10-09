@@ -1,9 +1,9 @@
 # Empezá acá: este repo está conectado a Scrum Master AI
 
-_Generado automáticamente el 2026-10-09T14:41:38.740Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-10-09T16:54:37.958Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Si el usuario te pidió leer la documentación de este proyecto, o arrancó una conversación
-sobre "qué sigue", "cargar requerimientos", "sincronizar tests", "reportar avance" o
+sobre "qué sigue", "cargar tareas", "sincronizar tests", "reportar avance" o
 similar, seguí estos pasos antes de hacer nada más.
 
 Este documento **no dice qué puede hacer cada rol**: identifica de quién es la key y te
@@ -77,8 +77,8 @@ necesita es entender qué hay en el proyecto y qué puede pedir a partir de acá
    ```
 3. **Con eso, escribile un mensaje de bienvenida en texto natural** (nunca una lista de
    pasos técnicos tipo "clonación/autenticación/manifest"), que incluya:
-   - Nombre del proyecto, cuántas Historias de Usuario tiene, y cuántos Requerimientos
-     desglosados por estado (`to_do`/`doing`/`blocked`/`pr_open`/`merged_dev`/`in_testing`/`tested`/`in_production`)
+   - Nombre del proyecto, cuántas Historias de Usuario tiene, y cuántas Tareas
+     desglosadas por estado (`to_do`/`doing`/`blocked`/`pr_open`/`merged_dev`/`in_testing`/`tested`/`in_production`)
      — así ya sabe si el proyecto recién arranca o viene con trabajo en curso.
    - Qué puede pedirte a partir de acá, en casos de uso concretos: eso está en la sección
      "Lo que más vas a hacer" del documento de su rol, escrito en lenguaje de usuario.
