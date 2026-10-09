@@ -1,6 +1,6 @@
 # 📋 Estándar de pruebas y evidencias
 
-_Generado automáticamente el 2026-10-09T14:41:19.956Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-10-09T16:54:18.936Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Esto es **cómo se redacta y se certifica una prueba en este proyecto**. Aplica a quien
 desarrolla (etapa `desarrollo`) y a quien hace QA (etapa `integracion`): los dos cargan
@@ -85,7 +85,7 @@ decorativo y ninguno se deja en blanco.
   `Clave: Prueba1234`): así la app los muestra con un botón para copiarlos, y la URL
   queda clickeable.
 - **Rol y permisos**: con qué rol tiene que estar la sesión activa.
-- **Dependencias**: qué tiene que existir antes. **Nombrá el Requerimiento del que
+- **Dependencias**: qué tiene que existir antes. **Nombrá la Tarea del que
   depende por código**, no sólo el dato (`RF-03 mergeado; TC-01 aprobado; paciente base
   creado`).
 
@@ -120,11 +120,22 @@ corrida, más una línea de qué se corrió y qué se vio.
 **La API rechaza con `400` marcar un Test `Aprobado` o `Fallido` sin `evidence`.** No es
 un trámite: marcar Aprobado era la única forma de decir "esto funciona" sin mostrar nada.
 
+**Y rechaza, con el mismo `400`, la evidencia que nombra la guía, sus capturas o la entrega
+fuera de la carpeta de la Historia** (§3.1 y §3.3). Lo que no pasa: `docs/imagenes/…`,
+`GUIA_PRUEBAS_QA_MANUAL_*.md`, `scrumDocs/entregas/…`, y cualquier `.png` bajo `docs/` que
+no esté en la carpeta de una Historia. El error dice dónde va el archivo.
+
+Lo que **sí** pasa, y por eso la regla no estorba: **la prosa sola**. Una prueba automática
+no tiene guía que enlazar y su evidencia es la salida de la corrida — eso se acepta igual
+que siempre. También se aceptan los enlaces que no son una guía, como el
+`docs/api/<REQ>/endpoints.md` que escribe `/dev-sync`. Lo único que se rechaza es apuntar al
+lugar viejo.
+
 ---
 
 ## 📄 3. La documentación de respaldo en el repositorio
 
-Por cada Historia de Usuario o Requerimiento entregado, dejá en el repositorio:
+Por cada Historia de Usuario o Tarea entregada, dejá en el repositorio:
 
 ### 3.1. Dónde va la guía visual: `docs/pruebas/<historia>/<CODIGO_REQ>-<nombre>.md`
 
@@ -134,10 +145,10 @@ Por cada Historia de Usuario o Requerimiento entregado, dejá en el repositorio:
 docs/
 └── pruebas/                             ← todas las pruebas, juntas y separadas del resto
     └── hu-03-plataforma-de-datos/       ← una carpeta por Historia de Usuario
-        ├── RF-03-login.md               ← la guía de pruebas de un Requerimiento
+        ├── RF-03-login.md               ← la guía de pruebas de una Tarea
         ├── RF-03-entrega.md             ← su documento de entrega (§3.3)
         ├── RF-03-entrega.sh             ← su script del flujo integrado (§3.3)
-        ├── RF-04-recuperar-clave.md     ← otro Requerimiento, de la MISMA historia
+        ├── RF-04-recuperar-clave.md     ← otra Tarea, de la MISMA historia
         └── imagenes/
             ├── RF-03-paso-1.png
             └── RF-03-paso-2.png
@@ -149,18 +160,18 @@ docs/
 nombre (código y nombre de la historia, en minúsculas y con guiones) que la app ya usó al
 crear la rama.
 
-**El archivo** lleva el código del Requerimiento adelante y su nombre atrás
+**El archivo** lleva el código de la Tarea adelante y su nombre atrás
 (`RF-03-login.md`): el código los ordena solos en el listado del directorio. Si en esa
 carpeta ya hay otro `.md` con el mismo código — pasa, el código sale de la secuencia y se
-puede repetir dentro de una historia — agregale el id del Requerimiento al final.
+puede repetir dentro de una historia — agregale el id de la Tarea al final.
 
 Por qué así y no como antes: `docs/` es la documentación del producto, y las guías tiradas
 ahí al mismo nivel la tapaban. Agrupadas por Historia se leen como lo que son —
 **la unidad que se entrega y que el cliente aprueba**: abrís la carpeta de la historia y
 tenés sus pruebas y sus capturas completas, sin ir a pescar archivos por prefijo.
 
-> Las guías que ya están sueltas en `docs/` se mudan cuando se vuelva a tocar ese
-> Requerimiento, no todas de golpe. Si movés una, **actualizá el `evidence` del Test**: el
+> Las guías que ya están sueltas en `docs/` se mudan cuando se vuelva a tocar esa
+> Tarea, no todas de golpe. Si movés una, **actualizá el `evidence` del Test**: el
 > enlace viejo queda roto y ese enlace es la evidencia.
 
 Adentro, la guía tiene:
@@ -286,8 +297,8 @@ Y hay un segundo motivo, que es el que vuelve a esto una corrección y no un gus
 archivos los escribe quien desarrolla. Guardar trabajo a mano en el territorio de lo
 generado es pedir que algún día una publicación lo pise. `docs/` es del equipo: es donde van.
 
-> Lo que ya está en `scrumDocs/entregas/` se mueve cuando se vuelva a tocar ese
-> Requerimiento, igual que las guías (§3.1) — y la app sigue aceptando que se corra desde
+> Lo que ya está en `scrumDocs/entregas/` se mueve cuando se vuelva a tocar esa
+> Tarea, igual que las guías (§3.1) — y la app sigue aceptando que se corra desde
 > ahí, así que una entrega vieja no deja de poder validarse.
 
 ---
@@ -301,25 +312,25 @@ proyecto es tiempo tirado en código que tu cambio no toca.
 
 El orden es de lo macro a lo micro. Nunca al revés:
 
-1. **Tus pruebas en verde.** Las de etapa `desarrollo` del Requerimiento que acabás de
+1. **Tus pruebas en verde.** Las de etapa `desarrollo` de la Tarea que acabás de
    implementar. Si alguna falla, no hay regresión que correr todavía.
-2. **Identificá el módulo.** El `moduleId` del Requerimiento. Es el radio de la regresión:
+2. **Identificá el módulo.** El `moduleId` de la Tarea. Es el radio de la regresión:
    lo que comparte módulo comparte código, datos y pantallas con lo que tocaste.
-3. **Corré la integración DE ESE MÓDULO.** Los tests de etapa `integracion` de los
-   Requerimientos del mismo módulo, los que tengan `verification.steps`. Son pocos pasos
+3. **Corré la integración DE ESE MÓDULO.** Los tests de etapa `integracion` de las
+   Tareas del mismo módulo, las que tengan `verification.steps`. Son pocos pasos
    HTTP y los corrés con `curl` contra la URL del entorno.
    **No corras los de los otros módulos**: ese es el tiempo que no se quiere perder.
 4. **Si todo pasa, terminaste.** Dejá una línea en la `evidence` del Test nuevo diciendo
    qué batería corriste y con qué resultado ("regresión de integración del módulo Turnos:
    6 tests, 6 en verde"). Eso es la constancia de que mirás más allá de tu cambio.
 5. **Si algo falla, ahí sí bajás a lo micro.** Y sólo ahí: corré los tests de etapa
-   `desarrollo` **del Requerimiento cuyo test de integración se rompió** — no los de todo
+   `desarrollo` **de la Tarea cuya test de integración se rompió** — no los de todo
    el módulo. Son los que localizan la pieza que se partió, porque prueban cada parte
    aislada. El que falle nombra qué hay que arreglar.
 6. **Lo que se rompió se registra.** Marcá `Fallido` **con evidencia** el test de
    integración que se cayó (es un hecho, no una opinión), nombralo por código en el
-   documento de entrega, y arreglalo si está en tu alcance. Si no lo está, decilo: un
-   Requerimiento que entrega sabiendo que rompió otro módulo y no lo dice es la peor
+   documento de entrega, y arreglalo si está en tu alcance. Si no lo está, decilo: una
+   Tarea que entrega sabiendo que rompió otro módulo y no lo dice es la peor
    entrega posible.
 7. **Volvé al paso 1** después de cada arreglo.
 
