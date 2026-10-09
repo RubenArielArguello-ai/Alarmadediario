@@ -1,6 +1,6 @@
 # Project Manager — qué podés hacer en este proyecto
 
-_Generado automáticamente el 2026-10-09T14:41:29.396Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-10-09T16:54:29.291Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Este es el documento de **tu** rol. El procedimiento paso a paso está en
 `.claude/skills/pm-sync/SKILL.md`.
@@ -14,8 +14,8 @@ hacer vos y qué delegar.
 
 ## Tu lugar en el circuito
 
-Estás en las dos puntas: al principio, definiendo el alcance (Historias, Requerimientos,
-Módulos, Entregas) y, al final, promoviendo `testing → main` y desplegando. En el medio
+Estás en las dos puntas: al principio, definiendo el alcance (Historias, Tareas,
+Módulos, Sprints) y, al final, promoviendo `testing → main` y desplegando. En el medio
 conviene dejar trabajar a los demás: si hacés vos el merge a `dev`, el Scrum Master se
 entera del estado del equipo por el tablero y no por su propia tarea.
 
@@ -27,13 +27,13 @@ entera del estado del equipo por el tablero y no por su propia tarea.
    y producción son las que usa la verificación de pruebas.
 3. **Sumá a tu equipo** y generá **una API key por persona**, desde "Usuarios Activos".
    Nunca compartas la tuya: la key **es** el rol, y la de un PM deja hacer todo.
-4. **Cargá el alcance**: Historias de Usuario y sus Requerimientos, con estimación y
+4. **Cargá el alcance**: Historias de Usuario y sus Tareas, con estimación y
    dependencias.
 5. **Apretá "Publicar"**: eso deja en el repositorio del proyecto los documentos y los
    skills, incluido este que estás leyendo. Recién ahí la IA de cada integrante puede
    trabajar contra la app desde su IDE.
 6. **Repetí el paso 5 cuando cambie el alcance.** Los cuatro documentos derivados
-   (plan, Historias, Requerimientos, grafo) se republican solos en cada cambio; los skills
+   (plan, Historias, Tareas, grafo) se republican solos en cada cambio; los skills
    y los documentos de rol, no.
 
 ## Verificable quiere decir verificable desde la app
@@ -41,21 +41,21 @@ entera del estado del equipo por el tablero y no por su propia tarea.
 Una condición de aprobación no sirve si nadie la puede comprobar apretando un botón. Si
 para eso hace falta preparar el entorno —que permita la verificación desde el navegador,
 que tenga datos semilla, que exponga un endpoint de salud—, eso **no** va adentro de la
-condición: es un Requerimiento **operacional** aparte, creado una vez al principio del
+condición: es una Tarea **operacional** aparte, creado una vez al principio del
 proyecto y puesto como dependencia de lo que venga después. Si no está hecho, cada
-Requerimiento nuevo arrastra el mismo bloqueo y nadie puede cerrar nada.
+Tarea nueva arrastra el mismo bloqueo y nadie puede cerrar nada.
 
 ## El alcance se carga de a una pieza, y ordenado
 
 Cada Historia se valida antes de cargar la siguiente, y ninguna se carga sin criterios de
-aceptación. Cada Requerimiento nuevo se crea con sus **condiciones de aprobación**
+aceptación. Cada Tarea nueva se crea con sus **condiciones de aprobación**
 (`acceptanceCriteria`, propias de esa tarjeta) y declarando de qué depende: el orden y la
 definición de terminado son parte del desglose, no un ajuste posterior.
 
-Una Historia con un solo Requerimiento que hace todo no está fragmentada. Si no se puede
+Una Historia con un solo Tarea que hace todo no está fragmentada. Si no se puede
 probar por partes, hay que cortarla antes de que alguien la tome.
 
-## Qué escribís del Requerimiento
+## Qué escribís de la Tarea
 
 **Campos que podés escribir** con `PATCH /api/v1/requirements/[id]`:
 
@@ -69,7 +69,7 @@ El bloqueo nunca entra por `PATCH`, ni para ponerlo ni para sacarlo: va por `POS
 
 - `merged_dev` — sale de mergear el Pull Request: POST /api/v1/requirements/<id>/merge, o el botón "Mergear a dev" del tablero
 - `in_testing` — sale de promover la rama `dev` a `testing`: POST /api/v1/projects/<id>/promote
-- `tested` — lo fijan los Tests del Requerimiento cuando pasan en testing
+- `tested` — lo fijan los Tests de la Tarea cuando pasan en testing
 - `in_production` — sale de promover `testing` a la rama de producción: POST /api/v1/projects/<id>/promote
 
 Un `PATCH` con cualquiera de esos cuatro responde 400. Si el proyecto no tiene repositorio configurado se permite igual (no hay git que pueda contradecir al tablero); y si lo tiene y hay que forzarlo —el PR se mergeó por afuera, el webhook nunca llegó— hay que mandar `motivoManual` con la explicación, que queda en el registro de actividad.
@@ -98,24 +98,24 @@ solo string, un criterio por línea con `\n`, nunca un array. Si el usuario dict
 Historia sin criterios, proponéselos a partir de lo que dictó y que los valide — pero la
 Historia no entra sin ellos.
 
-## Crear un Requerimiento
+## Crear una Tarea
 
 ```json
 {
-  "name": "Nombre del Requerimiento",
+  "name": "Nombre de la Tarea",
   "description": "Qué hay que implementar",
   "type": "funcional",
   "acceptanceCriteria": "1. El alta rechaza un email ya registrado y lo dice en pantalla\n2. La contraseña se guarda hasheada, nunca en texto plano"
 }
 ```
 
-`acceptanceCriteria` **es obligatorio** al crear un Requerimiento (salvo dentro de un
+`acceptanceCriteria` **es obligatorio** al crear una Tarea (salvo dentro de un
 contenedor operacional): son las condiciones que dicen cuándo está terminado, la app
 **deriva de ellas dos Tests por condición** (uno de `desarrollo` para el programador y uno
 de `integracion` para QA), y el paso a "Hecho" exige que cada condición tenga un Test
 aprobado. Sin ellas, el alta contesta `400` y el developer queda trabado al final.
 
-## Los Requerimientos operacionales
+## Las Tareas operacionales
 
 El trabajo real que no nace de una Historia de Usuario también se carga y se agenda:
 levantar la VM donde corre `testing` para que QA valide, la de `tested` para mostrarle el
@@ -142,13 +142,13 @@ curl -s -X POST "$SCRUM_API_URL/api/v1/projects/$PROJECT_ID/user-stories" \
   -d @/tmp/cuerpo.json
 ```
 
-- **Nace con su primer Requerimiento adentro**: `estimated` y `assignee` van a ese hijo, que
-  es el que se ve en el Kanban y en el Grafo. Para sumarle más tareas, colgale otro
-  Requerimiento con `POST /api/v1/user-stories/$CONTENEDOR_ID/requirements`.
-- **Se numera `RO-01`, `RO-02`… por proyecto**; sus hijos llevan código de Requerimiento
+- **Nace con su primer Tarea adentro**: `estimated` y `assignee` van a ese hijo, que
+  es el que se ve en el Kanban y en el Grafo. Para sumarle más tareas, colgale otra
+  Tarea con `POST /api/v1/user-stories/$CONTENEDOR_ID/requirements`.
+- **Se numera `RO-01`, `RO-02`… por proyecto**; sus hijos llevan código de Tarea
   normal (`RF-NN`). Desde la 029 *operacional* es el `kind` del contenedor, no un `type`.
 - **`deliveryId` es tuyo** (el Scrum Master no lo puede setear): un operacional puede cerrar
-  una Entrega igual que cualquier otro trabajo — la demo al cliente **es** la entrega.
+  un Sprint igual que cualquier otro trabajo — la demo al cliente **es** la entrega.
 - **Usalo como dependencia.** Una promoción a `testing` que espera una máquina que nadie
   levantó tiene que estar dibujada como dependencia, no vivir en la cabeza de alguien.
 
@@ -156,41 +156,41 @@ curl -s -X POST "$SCRUM_API_URL/api/v1/projects/$PROJECT_ID/user-stories" \
 
 | Método | Ruta | Para qué |
 |---|---|---|
-| `DELETE` | `/api/v1/deliveries/[id]` | Borrar una Entrega. |
+| `DELETE` | `/api/v1/deliveries/[id]` | Borrar un Sprint. |
 | `GET` | `/api/v1/me` | Quién sos: id, username, rol y los proyectos de los que sos miembro. Es la primera llamada de cualquier skill. |
 | `DELETE` | `/api/v1/modules/[id]` | Borrar un Módulo. |
 | `GET` | `/api/v1/projects/[id]` | Datos del proyecto: nombre, repositorio, rama por defecto, guía de estilo. |
-| `GET` | `/api/v1/projects/[id]/deliveries` | Las Entregas comprometidas con el cliente y su fecha. |
-| `POST` | `/api/v1/projects/[id]/deliveries` | Crear una Entrega comprometida con el cliente. |
+| `GET` | `/api/v1/projects/[id]/deliveries` | Los Sprints comprometidos con el cliente y su fecha. |
+| `POST` | `/api/v1/projects/[id]/deliveries` | Crear un Sprint comprometido con el cliente. |
 | `GET` | `/api/v1/projects/[id]/environments` | Las URLs de los entornos (dev, testing, producción) para verificar pruebas contra el que corresponda. |
 | `PUT` | `/api/v1/projects/[id]/environments` | Configurar las URLs de los entornos del proyecto. |
 | `GET` | `/api/v1/projects/[id]/members` | El equipo del proyecto con el rol de cada uno. Es de dónde sale el `assignee` al repartir. |
 | `GET` | `/api/v1/projects/[id]/modules` | Los Módulos del proyecto. |
-| `POST` | `/api/v1/projects/[id]/modules` | Crear un Módulo para agrupar Requerimientos. |
+| `POST` | `/api/v1/projects/[id]/modules` | Crear un Módulo para agrupar Tareas. |
 | `POST` | `/api/v1/projects/[id]/promote` | Promover la rama entera de un entorno al siguiente: `dev → testing` o `testing → main`. `dev → testing` lo hacen QA y el PM; `testing → main`, sólo el PM. El pase a producción se rechaza si queda algo sin testear (`force` es del PM y queda logueado). |
 | `POST` | `/api/v1/projects/[id]/publish` | Publicar la documentación del proyecto en el repositorio. _(sesión web, no API key)_ Usa la cookie de la app: desde el IDE con API key responde 401. Se aprieta el botón "Publicar" en la web. |
 | `GET` | `/api/v1/projects/[id]/publish/preview` | Ver qué documentos cambiaron antes de publicarlos. _(sesión web, no API key)_ |
-| `GET` | `/api/v1/projects/[id]/requirements` | Todos los Requerimientos del proyecto con su estado, asignado, estimación y dependencias. |
-| `GET` | `/api/v1/projects/[id]/user-stories` | Historias de Usuario y contenedores operacionales, con sus Requerimientos colgando. |
-| `POST` | `/api/v1/projects/[id]/user-stories` | Crear una Historia de Usuario (`kind: "historia"`) o un **Requerimiento operacional** (`kind: "operacional"`): el trabajo real que no nace de una Historia — levantar la VM donde va a correr `testing`, preparar la de producción, una capacitación, una auditoría, una reunión con el cliente. `acceptanceCriteria` es OBLIGATORIO cuando `kind` es `historia`: sin criterios (o con menos de 10 caracteres) contesta 400. No existe la Historia con criterios pendientes. El Product Owner sólo `historia`; el **Scrum Master sólo `operacional`**; el PM las dos. El operacional nace con su primer Requerimiento adentro, así que `estimated` y `assignee` del cuerpo van a ese hijo. |
-| `DELETE` | `/api/v1/requirements/[id]` | Borrar un Requerimiento. |
-| `PATCH` | `/api/v1/requirements/[id]` | Editar un Requerimiento: mover la tarjeta, asignar, estimar, anotar observaciones, agendar. Pasar a `pr_open` ("Hecho") exige, para el developer: haber pasado por `doing`, tener rama con commits, y que CADA condición de aprobación tenga al menos un Test APROBADO con su evidencia y ningún Test suelto -- si no, 400 nombrando lo que falta. Qué campos podés tocar depende del rol, y el developer sólo sobre lo que tiene asignado. Ver la sección "Campos" de este documento. `integrantes` es la lista COMPLETA de las personas afectadas a la actividad además del responsable (ids o nombres de usuario): se manda entera, así que sacar a alguien es mandarla sin esa persona. Es información de agenda para el Grafo y no le da ningún permiso sobre el Requerimiento. |
+| `GET` | `/api/v1/projects/[id]/requirements` | Todas las Tareas del proyecto con su estado, su responsable, su estimación y sus dependencias. |
+| `GET` | `/api/v1/projects/[id]/user-stories` | Historias de Usuario y contenedores operacionales, con sus Tareas colgando. |
+| `POST` | `/api/v1/projects/[id]/user-stories` | Crear una Historia de Usuario (`kind: "historia"`) o una **Tarea operacional** (`kind: "operacional"`): el trabajo real que no nace de una Historia — levantar la VM donde va a correr `testing`, preparar la de producción, una capacitación, una auditoría, una reunión con el cliente. `acceptanceCriteria` es OBLIGATORIO cuando `kind` es `historia`: sin criterios (o con menos de 10 caracteres) contesta 400. No existe la Historia con criterios pendientes. El Product Owner sólo `historia`; el **Scrum Master sólo `operacional`**; el PM las dos. El operacional nace con su primer Tarea adentro, así que `estimated` y `assignee` del cuerpo van a ese hijo. |
+| `DELETE` | `/api/v1/requirements/[id]` | Borrar una Tarea. |
+| `PATCH` | `/api/v1/requirements/[id]` | Editar una Tarea: mover la tarjeta, asignar, estimar, anotar observaciones, agendar. Pasar a `pr_open` ("Hecho") exige, para el developer: haber pasado por `doing`, tener rama con commits, y que CADA condición de aprobación tenga al menos un Test APROBADO con su evidencia y ningún Test suelto -- si no, 400 nombrando lo que falta. Qué campos podés tocar depende del rol, y el developer sólo sobre lo que tiene asignado. Ver la sección "Campos" de este documento. `integrantes` es la lista COMPLETA de las personas afectadas a la actividad además del responsable (ids o nombres de usuario): se manda entera, así que sacar a alguien es mandarla sin esa persona. Es información de agenda para el Grafo y no le da ningún permiso sobre la Tarea. |
 | `DELETE` | `/api/v1/requirements/[id]/block` | Destrabar: saca el candado y devuelve la tarjeta al estado anterior. |
-| `POST` | `/api/v1/requirements/[id]/block` | Bloquear un Requerimiento con motivo escrito y responsable. Congela el reloj. Cualquier miembro bloquea: el impedimento lo encuentra quien lo encuentra. `esRechazo: true` (review que pide cambios) es sólo del PM y del Scrum Master. |
-| `POST` | `/api/v1/requirements/[id]/merge` | Integrar a `dev` el PR de un Requerimiento que está en `pr_open`. Decide por estado: los ya integrados responden 200 idempotente, el resto 409. |
-| `GET` | `/api/v1/requirements/[id]/tests` | Los Tests de un Requerimiento, con su estado y su resultado. |
-| `POST` | `/api/v1/requirements/[id]/tests` | Crear un Test de un Requerimiento. |
+| `POST` | `/api/v1/requirements/[id]/block` | Bloquear una Tarea con motivo escrito y responsable. Congela el reloj. Cualquier miembro bloquea: el impedimento lo encuentra quien lo encuentra. `esRechazo: true` (review que pide cambios) es sólo del PM y del Scrum Master. |
+| `POST` | `/api/v1/requirements/[id]/merge` | Integrar a `dev` el PR de una Tarea que está en `pr_open`. Decide por estado: los ya integrados responden 200 idempotente, el resto 409. |
+| `GET` | `/api/v1/requirements/[id]/tests` | Los Tests de una Tarea, con su estado y su resultado. |
+| `POST` | `/api/v1/requirements/[id]/tests` | Crear un Test de una Tarea. |
 | `DELETE` | `/api/v1/tests/[id]` | Borrar un Test. |
 | `PATCH` | `/api/v1/tests/[id]` | Editar un Test o marcar su resultado. |
-| `DELETE` | `/api/v1/user-stories/[id]` | Borrar una Historia de Usuario o un Requerimiento operacional con todo lo que cuelga. Mismo reparto por `kind` que el POST. |
-| `PATCH` | `/api/v1/user-stories/[id]` | Editar una Historia de Usuario o un Requerimiento operacional. Mismo reparto por `kind` que el POST. Vaciar `acceptanceCriteria` de una Historia se rechaza con 400: para no tocarlos, no mandes la clave. Renombrar un operacional que tiene un solo hijo le propaga el nombre. Los campos de ejecución (fechas, Entrega) los escribe sólo el PM. |
-| `POST` | `/api/v1/user-stories/[id]/requirements` | Crear un Requerimiento dentro de una Historia de Usuario **o dentro de un contenedor operacional** (la segunda y siguientes tareas de ese operacional). `acceptanceCriteria` es OBLIGATORIO (salvo dentro de un operacional): sin condiciones de aprobación el Requerimiento no se puede verificar ni entregar, y de ellas la app deriva sola dos Tests por condición. El Scrum Master lo crea con los campos que puede escribir; el contenido (nombre, descripción, tipo) es del PM. |
+| `DELETE` | `/api/v1/user-stories/[id]` | Borrar una Historia de Usuario o una Tarea operacional con todo lo que cuelga. Mismo reparto por `kind` que el POST. |
+| `PATCH` | `/api/v1/user-stories/[id]` | Editar una Historia de Usuario o una Tarea operacional. Mismo reparto por `kind` que el POST. Vaciar `acceptanceCriteria` de una Historia se rechaza con 400: para no tocarlos, no mandes la clave. Renombrar un operacional que tiene un solo hijo le propaga el nombre. Los campos de ejecución (fechas, Sprint) los escribe sólo el PM. |
+| `POST` | `/api/v1/user-stories/[id]/requirements` | Crear una Tarea dentro de una Historia de Usuario **o dentro de un contenedor operacional** (la segunda y siguientes tareas de ese operacional). `acceptanceCriteria` es OBLIGATORIO (salvo dentro de un operacional): sin condiciones de aprobación la Tarea no se puede verificar ni entregar, y de ellas la app deriva sola dos Tests por condición. El Scrum Master lo crea con los campos que puede escribir; el contenido (nombre, descripción, tipo) es del PM. |
 
 ## Lo único que no podés
 
 | Querés | Te contesta | Quién |
 |---|---|---|
-| Abrir la rama de un Requerimiento | 403 | el developer, y sólo él. Es lo que arranca el reloj |
+| Abrir la rama de una Tarea | 403 | el developer, y sólo él. Es lo que arranca el reloj |
 | Crear otra cuenta de Project Manager | 403 | el admin. Un PM no puede dar de alta un PM |
 | Ajustar el tiempo real de una tarjeta | no existe el campo | nadie: sale de los hechos de git |
 
@@ -213,7 +213,7 @@ curl -s -X POST "$SCRUM_API_URL/api/v1/projects/$PROJECT_ID/promote" \
   -d @/tmp/cuerpo.json
 ```
 
-Se rechaza si queda algún Requerimiento en `in_testing`: git arrastra la rama entera, así
+Se rechaza si queda alguna Tarea en `in_testing`: git arrastra la rama entera, así
 que promover con pruebas pendientes haría que el tilde de producción mienta. `force: true`
 existe, es sólo tuyo y queda anotado en el registro de actividad como `PROMOTE_FORCED` —
 usalo cuando sepas por qué, no para saltear el aviso.
