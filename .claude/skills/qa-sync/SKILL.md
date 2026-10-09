@@ -1,12 +1,12 @@
 ---
 name: qa-sync
-description: Ayuda al Tester/QA a redactar y mantener scrumDocs/tests-manifest.json (los tests de endpoint que corre la app desde "Verificación en vivo"), leyendo el código real del proyecto para entender qué endpoints existen de verdad, y sincroniza ese archivo con los Requerimientos de Scrum Master AI vía la API. Solo crea/edita Tests -- nunca Requerimientos, Historias de Usuario, ramas ni estados de ejecución. Usar cuando el usuario pide "armar tests de este endpoint", "sincronizar tests", "actualizar el manifest de tests", "cargar los casos de prueba", o corre /qa-sync explícitamente.
+description: Ayuda al Tester/QA a redactar, correr y certificar los Tests de integración desde el IDE -- mantiene scrumDocs/tests-manifest.json leyendo el código real del proyecto, los sincroniza con los Requerimientos de Scrum Master AI vía la API, y registra el veredicto con la evidencia de lo que se corrió. Solo toca Tests -- nunca Requerimientos, Historias de Usuario ni ramas. Usar cuando el usuario pide "armar tests de este endpoint", "sincronizar tests", "correr los tests de QA", "certificar el requerimiento", "cargar los casos de prueba", o corre /qa-sync explícitamente.
 user-invocable: true
 allowed-tools:
   - Read
   - Grep
   - Glob
-  - Bash(curl *)
+  - Bash
   - Write
 ---
 
@@ -19,12 +19,18 @@ mano, este skill lee el **código real de este repo** (rutas, controllers, seria
 para proponer pasos que apuntan a endpoints que efectivamente existen — con método, body
 y código esperado reales, no inventados.
 
-**Alcance deliberadamente angosto**: sólo crea/edita Tests (`name`, `type`,
-`preconditions`, `expectedResult`, `verification.steps`). Lee los Requerimientos para
-saber a cuál colgar cada test, pero nunca los crea ni edita — igual que `/po-sync` no
-crea Historias de Usuario, este skill no crea Requerimientos. Tampoco toca status,
+**Cómo se redacta cada Test está en `scrumDocs/ESTANDAR-DE-PRUEBAS.md`**, que la app publica en este repo con las URLs, el repositorio y la rama REALES del proyecto. Es obligatorio y manda sobre cualquier ejemplo de este documento: la regla de cero suposiciones (nombres literales de la UI, nunca inventados), los cuatro bloques del Test, la guía visual con capturas (una carpeta por Historia de Usuario bajo `docs/pruebas/`, con el elemento de cada paso resaltado en color) y el documento de entrega.
+
+**Alcance deliberadamente angosto**: sólo Tests (`name`, `type`, `preconditions`,
+`expectedResult`, `criterionIndex`, `verification.steps`) y su veredicto. Lee los
+Requerimientos para saber a cuál colgar cada test, pero nunca los crea ni edita — igual que
+`/po-sync` no crea Historias de Usuario, este skill no crea Requerimientos. Tampoco toca
 tiempos, asignado, dependencias ni ramas — la API lo rechaza (403) si se intenta, es
 territorio de developer/Project Manager.
+
+El **estado del Requerimiento sí se mueve**, pero nunca a mano: lo mueve el resultado de los
+Tests. Marcar todos los Tests aprobados, con su evidencia y con todas las condiciones
+cubiertas, es lo que lo deja en `tested`.
 
 Argumentos: `$ARGUMENTS` — opcionalmente el código de un Requerimiento puntual (ej.
 `RF-03`) para enfocar el trabajo en uno solo, o una ruta de código a inspeccionar (ej. un
@@ -62,7 +68,20 @@ dependencias sin probar, decilo y proponé empezar por esas.
 
 ---
 
-## 0. Identidad y credenciales
+## 0. El entorno, antes que nada
+
+**Comprobá que podés probar antes de ponerte a escribir tests.** Si el entorno no responde,
+se sabe ahora y no después de media hora de trabajo:
+
+```bash
+node -v; npm -v                      # si el proyecto los usa
+curl -sS -o /dev/null -w '%{http_code}\n' "$BASE_URL"   # el entorno contra el que vas a correr
+```
+
+Si algo de eso falla, **pará y decíselo al usuario como impedimento**. No sigas con datos
+simulados ni des por aprobado nada: un test que no se pudo correr no es un test que pasó.
+
+## 0.5. Identidad y credenciales
 
 - `SCRUM_API_KEY` — variable de entorno, para la cuenta con rol Tester o QA. Si falta,
   explicar que el Project Manager la genera desde "Usuarios Activos" en la app, y parar.
@@ -190,11 +209,11 @@ trabajo que el programador ya hizo, y devolvérselo es más barato que repetirlo
 
 Cada Requerimiento entregado deja dos archivos:
 
-- `scrumDocs/entregas/<CODIGO>.md` — qué quedó implementado, cómo se levanta y se prueba,
+- `docs/pruebas/<historia>/<CODIGO>-entrega.md` — qué quedó implementado, cómo se levanta y se prueba,
   qué datos hacen falta, qué endpoints o pantallas toca, **cómo se corre integrado**, y
   **qué quedó afuera o se asumió**.
-- `scrumDocs/entregas/<CODIGO>.sh` — el script que recorre el flujo completo ya integrado,
-  prepara sus datos y los limpia. Corre con `bash scrumDocs/entregas/<CODIGO>.sh`, y con
+- `docs/pruebas/<historia>/<CODIGO>-entrega.sh` — el script que recorre el flujo completo ya integrado,
+  prepara sus datos y los limpia. Corre con `bash docs/pruebas/<historia>/<CODIGO>-entrega.sh`, y con
   `--carga N` repite el recorrido N veces reportando cuántas fallaron y cuánto tardó la más
   lenta. **Corrélo antes de tocar nada**: te dice en un comando si lo integrado se sostiene,
   y el modo carga es lo único que muestra lo que aparece recién bajo uso.
@@ -259,7 +278,11 @@ originalmente lee este archivo desde el lado del developer):
 - Si el archivo ya existe, agregar o actualizar la entrada de este `requirementCode`
   (matcheando por `requirementCode` + `title`) sin pisar entradas de otros
   Requerimientos.
-- `type` usa los valores que ya existen en la app: `Unitario`, `Integración`, `E2E`.
+- `type`: `Integración` para los pasos contra la API; `Estrés` para un script de carga;
+  `Manual` para lo que hay que mirar a ojo. (`Unitario` y `E2E` son del programador.)
+- `criterionIndex`: **a qué condición de aprobación responde este test**, por posición
+  (0 la primera). Sin esto el test no cuenta para la cobertura y el Requerimiento no llega
+  a `tested` aunque esté todo en verde. Una condición, al menos un test que le apunte.
 - `preconditions`: **nombrá el Requerimiento del que depende, por código**, no sólo el
   estado del sistema. `"RF-01 (registro) probado y en verde; usuario autenticado con rol
   admin"` dice de qué cuelga este test; `"usuario autenticado"` no dice nada de quién lo
@@ -310,13 +333,68 @@ delegarlo:
     -d @/tmp/cuerpo.json
   ```
   y guardar el `id` devuelto (o el que salió de la reconciliación) en el manifest.
-- **Nunca mandar `status` en `Aprobado`/`Fallido`** — el test queda en `Pendiente`; correr
-  los pasos y decidir si pasaron de verdad se hace desde "Verificar Funcionamiento" o
-  "Correr todos" en la app, con la Base URL real configurada ahí.
+- **Al crear o editar, el test nace `Pendiente`.** El veredicto es el paso 5.5 y va
+  aparte: primero se corre, después se certifica.
 - Si la reconciliación contra la API encuentra más de un test con el mismo `title` para el
   mismo Requerimiento (duplicados de corridas viejas, de antes de que este paso
   existiera), no elegir uno a ciegas: reportarlo en el resumen final para que el Tester
   decida cuál borrar (`DELETE $SCRUM_API_URL/api/v1/tests/$TEST_ID`).
+
+## 5.5. Correr, certificar y —si falla— bloquear
+
+Éste es el paso que convierte el trabajo en un visto bueno. **Nunca se saltea y nunca se
+hace de memoria.**
+
+**Primero corré.** Según la clase de test:
+
+| `type` | Cómo se corre | Qué queda de evidencia |
+|---|---|---|
+| `Integración` | los pasos, con `curl`, contra `$BASE_URL` | método, ruta, código y lo que devolvió cada paso |
+| `Estrés` | `bash scrumDocs/tests/<CODIGO>-carga.sh` | la salida: corridas, fallidas, la más lenta |
+| `Manual` | mirás la aplicación andando | qué miraste, dónde y qué viste |
+
+**Después certificá**, mandando el veredicto **con la evidencia**:
+
+```bash
+cat > /tmp/veredicto.json <<'JSON'
+{ "status": "Aprobado",
+  "evidence": "Corrí los 4 pasos contra https://testing.cliente.com: 201, 200, 200, 204. La fila se crea y se borra." }
+JSON
+
+curl -s -X PATCH "$SCRUM_API_URL/api/v1/tests/$TEST_ID" \
+  -H "Authorization: Bearer $SCRUM_API_KEY" -H "Content-Type: application/json" \
+  -d @/tmp/veredicto.json
+```
+
+Sin `evidence` la API contesta `400` y no se marca nada. **No inventes el texto para pasar
+el control**: nadie puede comprobar que sea cierto, y por eso mismo es tu firma. Si no
+pudiste correr algo, decilo y dejá el test en `Pendiente` — un test que no se corrió no es
+un test que pasó.
+
+**Un test unitario que sólo mockea no alcanza.** Si al leerlo ves que no ejercita el
+comportamiento real, decilo en el resumen final aunque esté en verde: no lo vuelvas a
+correr —no es tuyo, es de la etapa `desarrollo`— pero tampoco lo cuentes como cobertura de
+una condición que no prueba.
+
+**Si falla**, las dos cosas:
+
+1. `Fallido` con la evidencia: el defecto con precisión, para que Desarrollo sepa qué tocar.
+2. Bloqueá el Requerimiento con el motivo escrito:
+
+```bash
+cat > /tmp/bloqueo.json <<'JSON'
+{ "reason": "RF-03: el alta devuelve 500 cuando el email ya existe; se esperaba 409." }
+JSON
+
+curl -s -X POST "$SCRUM_API_URL/api/v1/requirements/$REQUIREMENT_ID/block" \
+  -H "Authorization: Bearer $SCRUM_API_KEY" -H "Content-Type: application/json" \
+  -d @/tmp/bloqueo.json
+```
+
+**Si el Requerimiento no pasó a `tested` con todo en verde**, es la cobertura: alguna
+condición de aprobación no tiene ningún test aprobado apuntándole. Revisá el
+`criterionIndex` de cada uno. Es deliberado — todos los tests en verde no dice nada de las
+condiciones para las que nadie escribió un test.
 
 ## 6. Guardar el manifest y resumen final
 
@@ -327,6 +405,9 @@ Reescribir `scrumDocs/tests-manifest.json` completo (viejas entradas + nuevas/ac
   implementa.
 - Cualquier endpoint que requiera un esquema de auth que el test no puede simular
   (para que el Tester sepa que ese paso hay que correrlo con cuidado o a mano).
+- **Qué condiciones de aprobación quedaron sin ningún test aprobado**, por Requerimiento:
+  es exactamente lo que le falta para llegar a `tested`.
+- Qué tests quedaron en `Pendiente` porque no se pudieron correr, y por qué.
 
 ---
 
@@ -338,6 +419,8 @@ Reescribir `scrumDocs/tests-manifest.json` completo (viejas entradas + nuevas/ac
 - Nunca crear ni editar Requerimientos ni Historias de Usuario desde este skill.
 - Nunca reintentar con otro shape de body si la API devuelve 403 al tocar un campo de
   ejecución — es intencional, no un error a esquivar.
+- Un `400` pidiendo `evidence` **no se esquiva**: es la API diciendo que falta correr algo.
+  No inventes el texto ni busques otro endpoint.
 - Si un paso tiene efectos secundarios reales (mails, cobros, borrados), usar datos de
   prueba que no afecten al sistema real, igual que ya se hizo antes para el endpoint de
   recuperación de contraseña.
