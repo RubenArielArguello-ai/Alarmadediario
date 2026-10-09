@@ -1,6 +1,6 @@
 # Project Manager — qué podés hacer en este proyecto
 
-_Generado automáticamente el 2026-09-24T19:57:34.215Z -- no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-10-09T14:41:29.396Z -- no editar a mano, se sobreescribe en cada publicación._
 
 Este es el documento de **tu** rol. El procedimiento paso a paso está en
 `.claude/skills/pm-sync/SKILL.md`.
@@ -74,6 +74,47 @@ El bloqueo nunca entra por `PATCH`, ni para ponerlo ni para sacarlo: va por `POS
 
 Un `PATCH` con cualquiera de esos cuatro responde 400. Si el proyecto no tiene repositorio configurado se permite igual (no hay git que pueda contradecir al tablero); y si lo tiene y hay que forzarlo —el PR se mergeó por afuera, el webhook nunca llegó— hay que mandar `motivoManual` con la explicación, que queda en el registro de actividad.
 
+## Crear una Historia de Usuario
+
+```bash
+cat > /tmp/cuerpo.json <<'JSON'
+{
+  "name": "Nombre de la historia",
+  "description": "Como [rol] quiero [acción] para [beneficio]",
+  "kind": "historia",
+  "acceptanceCriteria": "1. Dado [contexto] cuando [acción] entonces [resultado]\n2. Criterio 2..."
+}
+JSON
+
+curl -s -X POST "$SCRUM_API_URL/api/v1/projects/$PROJECT_ID/user-stories" \
+  -H "Authorization: Bearer $SCRUM_API_KEY" -H "Content-Type: application/json" \
+  -d @/tmp/cuerpo.json
+```
+
+`acceptanceCriteria` **es obligatorio y la API lo valida**: sin criterios (o con menos de
+10 caracteres, o sin ninguna condición parseable) contesta
+`400 {"error":"acceptanceCriteria es requerido para crear una Historia de Usuario"}`. Un
+solo string, un criterio por línea con `\n`, nunca un array. Si el usuario dictó la
+Historia sin criterios, proponéselos a partir de lo que dictó y que los valide — pero la
+Historia no entra sin ellos.
+
+## Crear un Requerimiento
+
+```json
+{
+  "name": "Nombre del Requerimiento",
+  "description": "Qué hay que implementar",
+  "type": "funcional",
+  "acceptanceCriteria": "1. El alta rechaza un email ya registrado y lo dice en pantalla\n2. La contraseña se guarda hasheada, nunca en texto plano"
+}
+```
+
+`acceptanceCriteria` **es obligatorio** al crear un Requerimiento (salvo dentro de un
+contenedor operacional): son las condiciones que dicen cuándo está terminado, la app
+**deriva de ellas dos Tests por condición** (uno de `desarrollo` para el programador y uno
+de `integracion` para QA), y el paso a "Hecho" exige que cada condición tenga un Test
+aprobado. Sin ellas, el alta contesta `400` y el developer queda trabado al final.
+
 ## Los Requerimientos operacionales
 
 El trabajo real que no nace de una Historia de Usuario también se carga y se agenda:
@@ -131,9 +172,9 @@ curl -s -X POST "$SCRUM_API_URL/api/v1/projects/$PROJECT_ID/user-stories" \
 | `GET` | `/api/v1/projects/[id]/publish/preview` | Ver qué documentos cambiaron antes de publicarlos. _(sesión web, no API key)_ |
 | `GET` | `/api/v1/projects/[id]/requirements` | Todos los Requerimientos del proyecto con su estado, asignado, estimación y dependencias. |
 | `GET` | `/api/v1/projects/[id]/user-stories` | Historias de Usuario y contenedores operacionales, con sus Requerimientos colgando. |
-| `POST` | `/api/v1/projects/[id]/user-stories` | Crear una Historia de Usuario (`kind: "historia"`) o un **Requerimiento operacional** (`kind: "operacional"`): el trabajo real que no nace de una Historia — levantar la VM donde va a correr `testing`, preparar la de producción, una capacitación, una auditoría, una reunión con el cliente. El Product Owner sólo `historia`; el **Scrum Master sólo `operacional`**; el PM las dos. El operacional nace con su primer Requerimiento adentro, así que `estimated` y `assignee` del cuerpo van a ese hijo. |
+| `POST` | `/api/v1/projects/[id]/user-stories` | Crear una Historia de Usuario (`kind: "historia"`) o un **Requerimiento operacional** (`kind: "operacional"`): el trabajo real que no nace de una Historia — levantar la VM donde va a correr `testing`, preparar la de producción, una capacitación, una auditoría, una reunión con el cliente. `acceptanceCriteria` es OBLIGATORIO cuando `kind` es `historia`: sin criterios (o con menos de 10 caracteres) contesta 400. No existe la Historia con criterios pendientes. El Product Owner sólo `historia`; el **Scrum Master sólo `operacional`**; el PM las dos. El operacional nace con su primer Requerimiento adentro, así que `estimated` y `assignee` del cuerpo van a ese hijo. |
 | `DELETE` | `/api/v1/requirements/[id]` | Borrar un Requerimiento. |
-| `PATCH` | `/api/v1/requirements/[id]` | Editar un Requerimiento: mover la tarjeta, asignar, estimar, anotar observaciones, agendar. Qué campos podés tocar depende del rol, y el developer sólo sobre lo que tiene asignado. Ver la sección "Campos" de este documento. `integrantes` es la lista COMPLETA de las personas afectadas a la actividad además del responsable (ids o nombres de usuario): se manda entera, así que sacar a alguien es mandarla sin esa persona. Es información de agenda para el Grafo y no le da ningún permiso sobre el Requerimiento. |
+| `PATCH` | `/api/v1/requirements/[id]` | Editar un Requerimiento: mover la tarjeta, asignar, estimar, anotar observaciones, agendar. Pasar a `pr_open` ("Hecho") exige, para el developer: haber pasado por `doing`, tener rama con commits, y que CADA condición de aprobación tenga al menos un Test APROBADO con su evidencia y ningún Test suelto -- si no, 400 nombrando lo que falta. Qué campos podés tocar depende del rol, y el developer sólo sobre lo que tiene asignado. Ver la sección "Campos" de este documento. `integrantes` es la lista COMPLETA de las personas afectadas a la actividad además del responsable (ids o nombres de usuario): se manda entera, así que sacar a alguien es mandarla sin esa persona. Es información de agenda para el Grafo y no le da ningún permiso sobre el Requerimiento. |
 | `DELETE` | `/api/v1/requirements/[id]/block` | Destrabar: saca el candado y devuelve la tarjeta al estado anterior. |
 | `POST` | `/api/v1/requirements/[id]/block` | Bloquear un Requerimiento con motivo escrito y responsable. Congela el reloj. Cualquier miembro bloquea: el impedimento lo encuentra quien lo encuentra. `esRechazo: true` (review que pide cambios) es sólo del PM y del Scrum Master. |
 | `POST` | `/api/v1/requirements/[id]/merge` | Integrar a `dev` el PR de un Requerimiento que está en `pr_open`. Decide por estado: los ya integrados responden 200 idempotente, el resto 409. |
@@ -142,8 +183,8 @@ curl -s -X POST "$SCRUM_API_URL/api/v1/projects/$PROJECT_ID/user-stories" \
 | `DELETE` | `/api/v1/tests/[id]` | Borrar un Test. |
 | `PATCH` | `/api/v1/tests/[id]` | Editar un Test o marcar su resultado. |
 | `DELETE` | `/api/v1/user-stories/[id]` | Borrar una Historia de Usuario o un Requerimiento operacional con todo lo que cuelga. Mismo reparto por `kind` que el POST. |
-| `PATCH` | `/api/v1/user-stories/[id]` | Editar una Historia de Usuario o un Requerimiento operacional. Mismo reparto por `kind` que el POST. Renombrar un operacional que tiene un solo hijo le propaga el nombre. Los campos de ejecución (fechas, Entrega) los escribe sólo el PM. |
-| `POST` | `/api/v1/user-stories/[id]/requirements` | Crear un Requerimiento dentro de una Historia de Usuario **o dentro de un contenedor operacional** (la segunda y siguientes tareas de ese operacional). El Scrum Master lo crea con los campos que puede escribir; el contenido (nombre, descripción, tipo) es del PM. |
+| `PATCH` | `/api/v1/user-stories/[id]` | Editar una Historia de Usuario o un Requerimiento operacional. Mismo reparto por `kind` que el POST. Vaciar `acceptanceCriteria` de una Historia se rechaza con 400: para no tocarlos, no mandes la clave. Renombrar un operacional que tiene un solo hijo le propaga el nombre. Los campos de ejecución (fechas, Entrega) los escribe sólo el PM. |
+| `POST` | `/api/v1/user-stories/[id]/requirements` | Crear un Requerimiento dentro de una Historia de Usuario **o dentro de un contenedor operacional** (la segunda y siguientes tareas de ese operacional). `acceptanceCriteria` es OBLIGATORIO (salvo dentro de un operacional): sin condiciones de aprobación el Requerimiento no se puede verificar ni entregar, y de ellas la app deriva sola dos Tests por condición. El Scrum Master lo crea con los campos que puede escribir; el contenido (nombre, descripción, tipo) es del PM. |
 
 ## Lo único que no podés
 
