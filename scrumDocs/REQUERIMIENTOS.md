@@ -1,6 +1,6 @@
 # Requerimientos -- Alarmadediario
 
-_Generado automaticamente el 2026-09-24T19:57:23.188Z -- no editar a mano, se sobreescribe en cada publicacion._
+_Generado automaticamente el 2026-10-09T14:41:14.483Z -- no editar a mano, se sobreescribe en cada publicacion._
 
 ## RO-01: Captura de imagen mediante camara
 
