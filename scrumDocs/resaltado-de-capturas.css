@@ -1,0 +1,48 @@
+/* Resaltado para las capturas de la guía de pruebas.
+ *
+ * Lo publica la app en `scrumDocs/resaltado-de-capturas.css` de este repositorio -- no lo
+ * edites a mano: se sobreescribe en cada publicación. El procedimiento completo
+ * está en `scrumDocs/ESTANDAR-DE-PRUEBAS.md` §3.2.
+ *
+ * La idea, en una línea: el botón que la prueba manda apretar se resalta
+ * CAMBIÁNDOLE EL ESTILO A LA PÁGINA y recién ahí se captura. Nunca se dibuja un
+ * cuadro ni una flecha sobre la imagen: eso es trabajo manual que hay que repetir
+ * en cada foto, nunca queda centrado, y a la primera vez que la UI mueve el botón
+ * la anotación queda apuntando al lugar equivocado y la imagen igual parece bien.
+ *
+ * Acá el resaltado calza perfecto porque ES el botón.
+ *
+ * Magenta y cian a propósito: no son colores de producto, así nadie confunde la
+ * marca de la guía con la interfaz que está probando. Y es el MISMO archivo en
+ * todos los proyectos, para que quien abre la guía de otro equipo ya sepa qué
+ * está mirando.
+ *
+ * Uso (Playwright):
+ *   await page.addStyleTag({ path: 'scrumDocs/resaltado-de-capturas.css' });
+ *   await page.locator('button:has-text("Crear")').evaluate(el => el.classList.add('scrum-qa-foco'));
+ *   await page.screenshot({ path: 'docs/pruebas/<historia>/imagenes/RF-03-paso-2.png' });
+ *
+ * Uso (a mano, consola del navegador):
+ *   document.querySelector('button.btn-primary').classList.add('scrum-qa-foco');
+ */
+
+.scrum-qa-foco {
+  outline: 4px solid #ff00a8 !important;
+  outline-offset: 3px !important;
+  box-shadow:
+    0 0 0 9px rgba(255, 0, 168, 0.25),
+    0 0 22px 6px rgba(0, 229, 255, 0.55) !important;
+  border-radius: 6px !important;
+  /* El z-index sólo manda sobre un elemento posicionado, y un botón suele no
+   * estarlo: sin esto, el glow queda tapado por el modal o la barra de al lado. */
+  position: relative !important;
+  z-index: 2147483647 !important;
+}
+
+/* Opcional, para pantallas muy cargadas: apaga el resto para que el foco cante.
+ * Se agrega al <body>, no al elemento. El `:has()` evita atenuar a los padres del
+ * elemento resaltado, que si no se lo llevarían puesto con ellos. */
+body.scrum-qa-atenuar *:not(.scrum-qa-foco):not(:has(.scrum-qa-foco)) {
+  opacity: 0.45 !important;
+  filter: grayscale(0.6) !important;
+}
