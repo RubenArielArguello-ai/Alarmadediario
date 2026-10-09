@@ -1,10 +1,10 @@
-# Plan de Requerimientos — Alarmadediario
+# Plan de Tareas — Alarmadediario
 
-_Generado automáticamente el 2026-10-09T14:41:11.778Z — no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-10-09T16:54:10.945Z — no editar a mano, se sobreescribe en cada publicación._
 
-Orden sugerido de desarrollo (respeta dependencias entre Requerimientos). Cada fila indica de qué Requerimientos depende, si tiene.
+Orden sugerido de desarrollo (respeta dependencias entre Tareas). Cada fila indica de qué Tareas depende, si tiene.
 
-| Orden | Código | Requerimiento | Historia de Usuario | Módulo | Entrega | Estado | Desarrollador | Depende de | Rechazos |
+| Orden | Código | Tarea | Historia de Usuario | Módulo | Sprint | Estado | Desarrollador | Depende de | Rechazos |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | RF-01 | Captura de imagen mediante camara | RO-01 | — | — | Haciendo | rubenArguello | — | — |
 | 2 | RF-01 | Procesamiento de imagen con Open cv | RO-02 | — | — | Hacer | Sin asignar | — | — |
