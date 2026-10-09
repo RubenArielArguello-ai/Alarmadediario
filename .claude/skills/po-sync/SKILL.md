@@ -224,15 +224,30 @@ Las llamadas, para la Historia que el usuario acaba de validar:
      -H "Authorization: Bearer $SCRUM_API_KEY" -H "Content-Type: application/json" \
      -d @/tmp/cuerpo.json
    ```
-3. **Si es nueva**, crearla:
+   Mandar `acceptanceCriteria` vacío la deja sin criterios, así que **la API lo rechaza**
+   con `400 {"error":"acceptanceCriteria no puede quedar vacío en una Historia de
+   Usuario"}`. Para no tocarlos, no mandes la clave.
+3. **Si es nueva**, crearla. `acceptanceCriteria` va SIEMPRE, con los criterios
+   verificables ya escritos y validados por el usuario:
    ```bash
    cat > /tmp/cuerpo.json <<'JSON'
-   {"name":"...","description":"...","acceptanceCriteria":"...","technicalDetail":"..."}
+   {
+     "name": "Nombre de la historia",
+     "description": "Como [rol] quiero [acción] para [beneficio]",
+     "kind": "historia",
+     "acceptanceCriteria": "1. Dado [contexto] cuando [acción] entonces [resultado]\n2. Criterio 2..."
+   }
    JSON
    curl -s -X POST "$SCRUM_API_URL/api/v1/projects/$PROJECT_ID/user-stories" \
      -H "Authorization: Bearer $SCRUM_API_KEY" -H "Content-Type: application/json" \
      -d @/tmp/cuerpo.json
    ```
+   Los criterios son UN solo string, uno por línea con `\n` — nunca un array. Sin ellos
+   (o con menos de 10 caracteres, o sin ninguna condición parseable) la API contesta
+   `400 {"error":"acceptanceCriteria es requerido para crear una Historia de Usuario"}`:
+   **no existe la Historia "con criterios pendientes"**. Si el usuario no los dictó,
+   proponéselos a partir de lo que dijo, que los valide, y recién ahí mandás el alta.
+
    El `code` (`HU-01`, `HU-02`, ...) lo asigna la API sola por orden de creación — nunca
    lo mandes en el body, se ignora.
 4. Guardar/actualizar en el manifest la entrada `{ userStoryId, sourceRef }` dentro de un
