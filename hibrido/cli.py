@@ -44,9 +44,12 @@ def cargar(ruta: str):
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--fondo", required=True, help="Foto de la alfombra vacía")
-    ap.add_argument("--actual", required=True, help="Foto con el posible diario")
+    ap.add_argument("--fondo", required=True, help="Foto de la zona vacía")
+    ap.add_argument("--actual", required=True, help="Foto con el posible objeto")
     ap.add_argument("--config", default=str(AQUI / "config.json"))
+    ap.add_argument("--prompts", nargs="+",
+                    help='Qué buscar, en inglés (ej: --prompts "a pencil")')
+    ap.add_argument("--nombre", help="Nombre del objeto para los mensajes")
     ap.add_argument("--modo", help="cascada | and | or | ponderado | solo_color | solo_modelo")
     ap.add_argument("--sin-modelo", action="store_true",
                     help="Atajo para --modo solo_color (no carga OWLv2)")
@@ -60,6 +63,11 @@ def main() -> int:
         cfg["fusion"]["modo"] = "solo_color"
     elif args.modo:
         cfg["fusion"]["modo"] = args.modo
+    if args.prompts:
+        cfg["modelo"]["prompts"] = args.prompts
+    if args.nombre:
+        cfg["modelo"]["nombre_objeto"] = args.nombre
+    nombre = cfg["modelo"].get("nombre_objeto", "objeto")
 
     try:
         fondo = cargar(args.fondo)
@@ -79,14 +87,15 @@ def main() -> int:
     color.fijar_fondo(fondo)
     res_color = color.analizar(actual)
 
-    print("\n--- 1. Diferencia de color sobre la alfombra ---")
+    print("\n--- 1. Diferencia de color en la zona ---")
     print(f"  ¿apareció algo?  {'sí' if res_color.hay_cambio else 'no'}")
     print(f"  regiones         {len(res_color.regiones)}")
     print(f"  área total       {res_color.area_total} px")
     print(f"  cobertura        {res_color.cobertura * 100:.2f}% de la zona")
     print(f"  ΔE color         {res_color.delta_e:.1f}")
     print(f"  ¿parece papel?   {res_color.papel:.2f}  "
-          f"(umbral {color.papel_minimo:.2f})")
+          + (f"(umbral {color.papel_minimo:.2f})" if color.exigir_papel
+             else "(no se exige)"))
     for i, r in enumerate(res_color.regiones, 1):
         print(f"    región {i}: {r.x2 - r.x1}x{r.y2 - r.y1} px en ({r.x1},{r.y1}), "
               f"área {r.area}, ΔL {r.delta_luz:+.1f}, croma {r.delta_croma:.1f}, "
@@ -138,16 +147,17 @@ def main() -> int:
         hay_cambio_color=res_color.hay_cambio,
         papel=res_color.papel,
         conf_modelo=conf,
-        umbral_papel=color.papel_minimo,
+        umbral_papel=color.umbral_papel,
         umbral_modelo=umbral_modelo,
+        nombre=nombre,
     )
 
     print(f"\n--- 3. Veredicto (modo {cfg['fusion']['modo']}) ---")
-    print(f"  color  dice: {'DIARIO' if veredicto.color_ok else 'no'}")
-    print(f"  modelo dice: {'DIARIO' if veredicto.modelo_ok else 'no'}")
+    print(f"  color  dice: {'hay algo nuevo' if veredicto.color_ok else 'no'}")
+    print(f"  modelo dice: {nombre.upper() if veredicto.modelo_ok else 'no'}")
     print(f"  score final: {veredicto.score:.3f}")
     print(f"  razón:       {veredicto.explicacion}")
-    print(f"\n{'✅ DIARIO ENTREGADO' if veredicto.es_diario else '❌ No hay diario'}\n")
+    print(f"\n{'✅ ALARMA: ' + nombre if veredicto.es_diario else '❌ No hay ' + nombre}\n")
 
     # ------------------------------------------------- comparación con el viejo
     if args.comparar:
@@ -161,7 +171,7 @@ def main() -> int:
         print("--- Comparación con detect_diario.py (gris, sin modelo) ---")
         print(f"  original: {'detecta algo' if detectado else 'no detecta nada'}"
               f"  ({len(dets)} región/es)")
-        print(f"  híbrido:  {'DIARIO' if veredicto.es_diario else 'no'}"
+        print(f"  híbrido:  {nombre.upper() if veredicto.es_diario else 'no'}"
               f"  ({len(res_color.regiones)} región/es de color, "
               f"conf modelo {conf:.2f})\n")
 

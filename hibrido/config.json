@@ -23,7 +23,10 @@
     "_area_nota": "Mismo valor que el detect_diario.py original, en pixeles.",
     "ignorar_sombras": true,
     "croma_sombra": 6.0,
-    "_sombras_nota": "Una sombra oscurece (dL<0) sin cambiar el tono (croma bajo). Un diario aclara la zona o cambia el tono. Poner en false si la alfombra es blanca.",
+    "sombra_luz_min": 0.45,
+    "_sombras_nota": "Una sombra oscurece (dL<0) sin cambiar el tono (croma bajo) y conservando al menos sombra_luz_min de la luz. Un objeto negro sobre una hoja blanca la baja mucho mas, por eso no se confunde con sombra.",
+    "exigir_papel": false,
+    "_exigir_papel_nota": "true solo para el diario: el color ademas exige que el objeto parezca papel. Para cualquier otro objeto (lapiz, llaves...) dejarlo en false y que decida el modelo con el prompt.",
     "frames_calibracion": 15,
     "saturacion_maxima": 90.0,
     "brillo_minimo": 90.0,
@@ -64,6 +67,10 @@
     "_pesos_nota": "Solo se usan en modo ponderado."
   },
   "deteccion": {
+    "intervalo_chequeo": 30,
+    "_intervalo_chequeo_desc": "Cada cuantos segundos se compara la zona contra la referencia vacia. 0 = todos los frames, sin pausa",
+    "max_segundos_chequeo": 30,
+    "_max_segundos_chequeo_desc": "Si un chequeo no puede concluir en este tiempo (hay una mano encima), se abandona hasta el proximo",
     "umbral_movimiento": 0.02,
     "_umbral_movimiento_desc": "Fraccion de pixeles que deben cambiar entre frames para considerar que hay movimiento",
     "segundos_estabilidad": 3.0,
@@ -71,7 +78,8 @@
     "confirmaciones_necesarias": 2,
     "_confirmaciones_desc": "Veredictos positivos seguidos antes de disparar la alarma",
     "segundos_entre_inferencias": 2.0,
-    "cooldown_alarma": 60.0,
+    "cooldown_alarma": 30.0,
+    "_cooldown_desc": "Segundos minimos entre dos alarmas. Igual al intervalo de chequeo para que sacar y volver a poner el objeto dispare de nuevo en el chequeo siguiente",
     "margen_recorte": 40,
     "_margen_recorte_desc": "Pixeles de contexto alrededor de la region de color que se le pasa al modelo"
   },

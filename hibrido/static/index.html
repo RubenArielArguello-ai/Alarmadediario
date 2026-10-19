@@ -137,7 +137,7 @@
       <p class="msg" id="msg"></p>
       <p class="leyenda">
         <i style="background:#22d3ee"></i>lo que vio la diferencia de color &nbsp;
-        <i style="background:#3fb950"></i>lo que el modelo reconoció como diario &nbsp;
+        <i style="background:#3fb950"></i>lo que el modelo reconoció como el objeto buscado &nbsp;
         <i style="background:#d29922"></i>detección débil del modelo
       </p>
     </div>
@@ -149,7 +149,7 @@
         <div class="val no" id="val-color">
           <span class="luz"></span>
           <span class="txt">
-            <span class="tit c1">1 · Color en la alfombra</span><br>
+            <span class="tit c1">1 · ¿Cambió algo en la zona?</span><br>
             <span class="sub" id="sub-color">esperando…</span>
           </span>
           <span class="voto" id="voto-color">—</span>
@@ -158,13 +158,31 @@
         <div class="val no" id="val-modelo">
           <span class="luz"></span>
           <span class="txt">
-            <span class="tit c2">2 · OWLv2 · ¿es un diario?</span><br>
+            <span class="tit c2">2 · OWLv2 · ¿es <span id="tit-objeto">el objeto</span>?</span><br>
             <span class="sub" id="sub-modelo">esperando…</span>
           </span>
           <span class="voto" id="voto-modelo">—</span>
         </div>
 
         <p class="veredicto" id="veredicto">—</p>
+      </div>
+
+      <div class="panel" style="border-color:#2d6b3f">
+        <h2>Qué busca el modelo</h2>
+        <label>Nombre para la alarma</label>
+        <input type="text" id="obj-nombre" value="diario">
+        <label>Descripciones en inglés (una por línea)</label>
+        <textarea id="obj-prompts" rows="3">a rolled newspaper
+a newspaper
+a folded newspaper</textarea>
+        <button class="primario" onclick="guardarObjetivo()">Cambiar objetivo</button>
+        <button onclick="preset('lapiz')">Preset lápiz</button>
+        <button onclick="preset('diario')">Preset diario</button>
+        <button onclick="preset('anteojos')">Preset anteojos</button>
+        <p class="msg" id="msg-obj">
+          En inglés: el modelo entiende mucho peor el español. Al cambiarlo se
+          hace un chequeo enseguida.
+        </p>
       </div>
 
       <div class="panel">
@@ -193,15 +211,28 @@
         <div class="fila"><span>Score final</span><span id="v-score">—</span></div>
         <div class="fila"><span>Confirmaciones</span><span id="v-confirm">—</span></div>
         <div class="fila"><span>Modelo</span><span id="v-infer">en espera</span></div>
+        <div class="fila"><span>Próximo chequeo</span><span id="v-prox">—</span></div>
       </div>
 
       <div class="panel">
-        <h2>Zona a vigilar (la alfombra)</h2>
+        <h2>Zona a vigilar</h2>
         <button id="btn-roi" onclick="toggleRoi()">Dibujar zona</button>
         <button onclick="limpiarRoi()">Usar toda la imagen</button>
-        <button onclick="recalibrar()">Recalibrar alfombra vacía</button>
+        <button onclick="recalibrar()">Recalibrar zona vacía</button>
         <p class="msg" id="msg-roi">
-          Marcá las esquinas de la alfombra. Recalibrá cada vez que muevas la cámara.
+          Marcá las 4 esquinas de la hoja (o de la zona). Recalibrá con la zona
+          vacía cada vez que muevas la cámara o cambie mucho la luz.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>Frecuencia de chequeo</h2>
+        <label>Chequear cada <span class="valor" id="l-int">30 s</span></label>
+        <input type="range" id="s-int" min="0" max="120" step="5" value="30">
+        <button class="primario" onclick="guardarIntervalo()">Aplicar</button>
+        <p class="msg" id="msg-int">
+          En cada chequeo se compara la zona contra cómo estaba vacía; si cambió,
+          se le pregunta al modelo. En 0 se chequea sin pausa, todo el tiempo.
         </p>
       </div>
 
@@ -216,6 +247,10 @@
         <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
           <input type="checkbox" id="sombras" checked style="width:auto">
           Ignorar sombras
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <input type="checkbox" id="exigir-papel" style="width:auto">
+          Exigir que parezca papel (solo para el diario)
         </label>
         <button class="primario" onclick="guardarColor()">Aplicar</button>
         <p class="msg" id="msg-color"></p>
@@ -234,20 +269,6 @@
         <label>Segundos de estabilidad <span class="valor" id="l-est">3</span></label>
         <input type="range" id="s-est" min="1" max="15" step="1" value="3">
         <button class="primario" onclick="guardarAjustes()">Aplicar</button>
-      </div>
-
-      <div class="panel">
-        <h2>Qué busca el modelo</h2>
-        <label>Nombre para la alarma</label>
-        <input type="text" id="obj-nombre" value="diario">
-        <label>Descripciones en inglés (una por línea)</label>
-        <textarea id="obj-prompts" rows="3">a rolled newspaper
-a newspaper
-a folded newspaper</textarea>
-        <button class="primario" onclick="guardarObjetivo()">Cambiar objetivo</button>
-        <button onclick="preset('diario')">Preset diario</button>
-        <button onclick="preset('anteojos')">Preset anteojos</button>
-        <p class="msg" id="msg-obj"></p>
       </div>
 
       <div class="panel">
@@ -291,6 +312,7 @@ a folded newspaper</textarea>
 <script>
 const $ = id => document.getElementById(id);
 let ws, modoRoi = false, puntosRoi = [], cajas = [], umbralActual = 0.37;
+let intervaloActual = 30;
 
 // ---------------------------------------------------------------- WebSocket
 function conectar() {
@@ -305,8 +327,12 @@ function manejar(d) {
   $('placeholder').style.display = 'none';
   $('video').src = 'data:image/jpeg;base64,' + d.imagen;
 
-  setPill(d.estado, d.estado);
+  const objeto = $('obj-nombre').value.trim() || 'objeto';
+  setPill(d.estado, d.estado === 'diario' ? `¡${objeto}!` : d.estado);
   $('msg').textContent = d.mensaje;
+  $('v-prox').textContent = d.proximo_chequeo >= 0
+    ? `en ${Math.ceil(d.proximo_chequeo)} s`
+    : (intervaloActual > 0 ? 'chequeando ahora…' : 'sin pausa');
 
   // --- medidas ---
   $('v-mov').textContent    = (d.movimiento * 100).toFixed(1) + '%';
@@ -324,7 +350,7 @@ function manejar(d) {
   tarjeta('color', d.color_ok,
     d.color_cambio
       ? `ΔE ${d.color_delta_e.toFixed(0)} · papel ${d.color_papel.toFixed(2)} · ${d.color_area} px`
-      : 'nada nuevo sobre la alfombra');
+      : 'nada nuevo en la zona');
   tarjeta('modelo', d.modelo_ok,
     d.confianza > 0
       ? `confianza ${d.confianza.toFixed(2)} (umbral ${umbralActual.toFixed(2)})`
@@ -437,7 +463,7 @@ function toggleRoi() {
   if (!modoRoi) {
     modoRoi = true; puntosRoi = [];
     $('btn-roi').textContent = 'Cancelar';
-    $('msg-roi').textContent = 'Hacé clic en las esquinas de la alfombra.';
+    $('msg-roi').textContent = 'Hacé clic en las 4 esquinas de la hoja.';
   } else if (puntosRoi.length >= 3) {
     modoRoi = false;
     $('btn-roi').textContent = 'Dibujar zona';
@@ -463,13 +489,13 @@ async function enviarRoi(puntos) {
     body: JSON.stringify({puntos})
   });
   $('msg-roi').textContent = puntos.length
-    ? 'Zona guardada. Recalibrando la alfombra vacía…'
+    ? 'Zona guardada. Recalibrando con la zona vacía…'
     : 'Vigilando toda la imagen.';
 }
 
 async function recalibrar() {
   await fetch('/api/recalibrar', {method: 'POST'});
-  $('msg-roi').textContent = 'Recalibrando… dejá la alfombra vacía unos segundos.';
+  $('msg-roi').textContent = 'Recalibrando… dejá la zona vacía unos segundos.';
 }
 
 // ------------------------------------------------------------------- fusión
@@ -516,6 +542,8 @@ async function cambiarModo() {
 
 // ----------------------------------------------------------------- objetivo
 const PRESETS = {
+  lapiz:    {nombre: 'lápiz',
+             prompts: ['a pencil', 'a yellow pencil']},
   diario:   {nombre: 'diario',
              prompts: ['a rolled newspaper', 'a newspaper', 'a folded newspaper']},
   anteojos: {nombre: 'anteojos',
@@ -536,8 +564,24 @@ async function guardarObjetivo() {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({nombre, prompts})
   }).then(r => r.json());
-  $('msg-obj').textContent = `Buscando: ${r.prompts.join(', ')}`;
+  $('msg-obj').textContent = `Buscando: ${r.prompts.join(', ')}. Chequeando ya…`;
+  $('tit-objeto').textContent = r.nombre || nombre;
   silenciar();
+}
+
+// ------------------------------------------------------- frecuencia chequeo
+function textoIntervalo(v) { return v > 0 ? `${v} s` : 'sin pausa'; }
+
+async function guardarIntervalo() {
+  const intervalo_chequeo = parseInt($('s-int').value);
+  await fetch('/api/ajustes', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({intervalo_chequeo})
+  });
+  intervaloActual = intervalo_chequeo;
+  $('msg-int').textContent = intervalo_chequeo > 0
+    ? `Chequeando cada ${intervalo_chequeo} s. El primero arranca ya.`
+    : 'Chequeando sin pausa, todo el tiempo.';
 }
 
 // ------------------------------------------------------------------ ajustes
@@ -549,6 +593,9 @@ async function guardarObjetivo() {
 });
 ['de','area','papel'].forEach(k => {
   $('s-'+k).addEventListener('input', e => { $('l-'+k).textContent = e.target.value; });
+});
+$('s-int').addEventListener('input', e => {
+  $('l-int').textContent = textoIntervalo(parseInt(e.target.value));
 });
 
 // OWLv2 no devuelve probabilidades calibradas: 0.6 ya es una detección fuerte.
@@ -590,7 +637,8 @@ async function guardarColor() {
       delta_e_minimo:   parseFloat($('s-de').value),
       area_minima:      parseInt($('s-area').value),
       papel_minimo:     parseFloat($('s-papel').value),
-      ignorar_sombras:  $('sombras').checked
+      ignorar_sombras:  $('sombras').checked,
+      exigir_papel:     $('exigir-papel').checked
     })
   });
   $('msg-color').textContent = 'Umbrales de color aplicados.';
@@ -644,6 +692,11 @@ fetch('/api/config').then(r => r.json()).then(c => {
   if (col.area_minima != null)    { $('s-area').value = col.area_minima; $('l-area').textContent = col.area_minima; }
   if (col.papel_minimo != null)   { $('s-papel').value = col.papel_minimo; $('l-papel').textContent = col.papel_minimo; }
   $('sombras').checked = col.ignorar_sombras !== false;
+  $('exigir-papel').checked = !!col.exigir_papel;
+
+  intervaloActual = c.deteccion.intervalo_chequeo ?? 0;
+  $('s-int').value = intervaloActual;
+  $('l-int').textContent = textoIntervalo(intervaloActual);
 
   const modo = (c.fusion || {}).modo || 'cascada';
   $('fusion').value = modo;
@@ -651,6 +704,7 @@ fetch('/api/config').then(r => r.json()).then(c => {
   $('modo-actual').textContent = 'modo ' + modo;
 
   $('obj-nombre').value  = c.modelo.nombre_objeto || 'diario';
+  $('tit-objeto').textContent = c.modelo.nombre_objeto || 'el objeto';
   $('obj-prompts').value = (c.modelo.prompts || []).join('\n');
   if (c.roi.activa) { puntosRoi = c.roi.puntos; dibujar(); }
 });

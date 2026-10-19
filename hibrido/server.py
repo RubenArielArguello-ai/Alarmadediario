@@ -232,6 +232,7 @@ class Aplicacion:
             "score_final": resultado.score_final,
             "veredicto": resultado.veredicto,
             "confirmaciones": resultado.confirmaciones,
+            "proximo_chequeo": resultado.proximo_chequeo,
             "alarma": alarma_nueva,
             "cajas": [
                 {
@@ -330,6 +331,10 @@ def crear_app(config: dict) -> tuple[FastAPI, Aplicacion]:
         if "segundos_estabilidad" in datos:
             d.seg_estabilidad = float(datos["segundos_estabilidad"])
             config["deteccion"]["segundos_estabilidad"] = d.seg_estabilidad
+        if "intervalo_chequeo" in datos:
+            d.intervalo_chequeo = max(0.0, float(datos["intervalo_chequeo"]))
+            d.chequear_ya()
+            config["deteccion"]["intervalo_chequeo"] = d.intervalo_chequeo
         guardar_config()
         return {"ok": True}
 
@@ -342,6 +347,8 @@ def crear_app(config: dict) -> tuple[FastAPI, Aplicacion]:
             "area_minima": ("area_minima", int),
             "papel_minimo": ("papel_minimo", float),
             "ignorar_sombras": ("ignorar_sombras", bool),
+            "exigir_papel": ("exigir_papel", bool),
+            "sombra_luz_min": ("sombra_luz_min", float),
         }
         for clave, (attr, tipo) in mapa.items():
             if clave in datos:
@@ -384,8 +391,8 @@ def crear_app(config: dict) -> tuple[FastAPI, Aplicacion]:
         if datos.get("nombre"):
             owl.nombre = datos["nombre"].strip()
             config["modelo"]["nombre_objeto"] = owl.nombre
-        estado.detector.confirmaciones = 0
-        estado.detector.ultima_alarma = 0.0
+        # El veredicto anterior era sobre OTRO objeto: no vale más.
+        estado.detector.chequear_ya(olvidar_veredicto=True)
         guardar_config()
         print(f"[objetivo] ahora busco '{owl.nombre}': {', '.join(owl.prompts)}")
         return {"ok": True, "nombre": owl.nombre, "prompts": owl.prompts}

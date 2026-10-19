@@ -89,6 +89,14 @@ class ValidadorColor:
         self.area_minima = int(cfg.get("area_minima", 1500))
         self.ignorar_sombras = bool(cfg.get("ignorar_sombras", True))
         self.croma_sombra = float(cfg.get("croma_sombra", 6.0))
+        # Una sombra oscurece, pero no hasta el negro: la zona conserva al
+        # menos esta fracción de su luminosidad. Una birome negra sobre una
+        # hoja blanca la baja a ~0.1 y por eso NO es sombra.
+        self.sombra_luz_min = float(cfg.get("sombra_luz_min", 0.45))
+        # Para el diario sirve exigir que el objeto "parezca papel". Para
+        # cualquier otro objeto (un lápiz sobre una hoja) hay que apagarlo:
+        # quien decide qué es el objeto es el modelo, con el prompt.
+        self.exigir_papel = bool(cfg.get("exigir_papel", False))
         self.frames_calibracion = int(cfg.get("frames_calibracion", 15))
         # Umbrales del score "parece papel"
         self.sat_max = float(cfg.get("saturacion_maxima", 90.0))
@@ -102,6 +110,11 @@ class ValidadorColor:
         self._buffer: list[np.ndarray] = []
 
     # ------------------------------------------------------------- calibración
+    @property
+    def umbral_papel(self) -> float:
+        """Umbral de "parece papel" que usa la fusión: 0 si no se exige."""
+        return self.papel_minimo if self.exigir_papel else 0.0
+
     @property
     def calibrado(self) -> bool:
         return self.fondo_lab is not None
@@ -186,9 +199,12 @@ class ValidadorColor:
         cambio = delta_e > self.delta_e_min
 
         if self.ignorar_sombras:
-            # Sombra = se oscureció sin cambiar de tono. Un diario, al revés,
-            # aclara la zona (dL > 0) o cambia el tono (croma alto).
-            sombra = (d_luz < 0) & (d_croma < self.croma_sombra)
+            # Sombra = se oscureció sin cambiar de tono, y sin llegar al negro.
+            # Un diario aclara la zona (dL > 0) o cambia el tono (croma alto);
+            # un objeto negro la oscurece mucho más de lo que oscurece una
+            # sombra, que deja pasar buena parte de la luz.
+            conserva_luz = actual[..., 0] >= self.sombra_luz_min * self.fondo_lab[..., 0]
+            sombra = (d_luz < 0) & (d_croma < self.croma_sombra) & conserva_luz
             cambio &= ~sombra
 
         mascara = (cambio.astype(np.uint8)) * 255
@@ -253,9 +269,10 @@ class ValidadorColor:
         regiones.sort(key=lambda r: r.area, reverse=True)
         principal = regiones[0]
 
-        # El score mezcla "qué tan distinto es el color" con "qué tanto parece
-        # papel". Una mancha enorme de color rarísimo no debería disparar la
-        # alarma de diario, y una manchita muy papel tampoco.
+        # Con exigir_papel, el score mezcla "qué tan distinto es el color" con
+        # "qué tanto parece papel": una mancha enorme de color rarísimo no
+        # debería disparar la alarma de diario, y una manchita muy papel
+        # tampoco. Sin exigir_papel, solo cuenta cuánto cambió el color.
         f_delta = float(
             np.clip(
                 (principal.delta_e - self.delta_e_min)
@@ -263,7 +280,11 @@ class ValidadorColor:
                 0.0, 1.0,
             )
         )
-        score = float(np.clip(0.4 * f_delta + 0.6 * principal.papel, 0.0, 1.0))
+        score = (
+            float(np.clip(0.4 * f_delta + 0.6 * principal.papel, 0.0, 1.0))
+            if self.exigir_papel
+            else f_delta
+        )
 
         return ResultadoColor(
             hay_cambio=True,

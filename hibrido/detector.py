@@ -1,25 +1,27 @@
 """
 Detector híbrido: une los dos proyectos en un solo pipeline.
 
-    frame de cámara
+    frame de cámara (fija)
+         |
+    [0] ¿toca chequear?  cada `intervalo_chequeo` s (0 = todos los frames)
          |
          v
     [1] movimiento (gris, ~1 ms)      ¿alguien está pasando? -> esperar
          |
          v
-    [2] validador de color (LAB, ~5 ms)   ¿apareció algo sobre la alfombra?
-         |                                 ¿ese algo parece papel?
+    [2] validador de color (LAB, ~5 ms)   ¿cambió algo en la zona respecto
+         |                                 de cuando estaba vacía?
          |  (si no ve nada, acá se corta y el modelo nunca se despierta)
          v
-    [3] OWLv2 (~1-30 s según resolución)  ¿eso es un diario?
+    [3] OWLv2 (~1-30 s según resolución)  ¿eso es lo que dice el prompt?
          |   <- recibe SOLO el recorte que marcó el color, no el frame entero
          v
     [4] fusión -> veredicto -> confirmaciones -> ALARMA
 
-La idea de fondo es la misma que en el proyecto original: el diario NO se
-mueve. Mientras hay movimiento no decidimos nada, porque es una persona
-pasando. Recién cuando la escena se queda quieta y además cambió respecto de
-la alfombra vacía, tiene sentido preguntar.
+La idea de fondo es la misma que en el proyecto original: el objeto, una vez
+apoyado, NO se mueve. Mientras hay movimiento no decidimos nada, porque es
+una mano o una persona pasando. Recién cuando la escena se queda quieta y
+además cambió respecto de la zona vacía, tiene sentido preguntar.
 """
 
 from __future__ import annotations
@@ -38,7 +40,7 @@ from validador_color import ValidadorColor, ResultadoColor
 
 
 class Estado(str, Enum):
-    CALIBRANDO = "calibrando"        # aprendiendo cómo es la alfombra vacía
+    CALIBRANDO = "calibrando"        # aprendiendo cómo es la zona vacía
     VIGILANDO = "vigilando"          # todo normal
     MOVIMIENTO = "movimiento"        # algo se mueve, esperamos
     ESTABILIZANDO = "estabilizando"  # apareció algo, esperando que se quede quieto
@@ -69,6 +71,7 @@ class Resultado:
     # --- común ---
     cajas: list = field(default_factory=list)
     confirmaciones: int = 0
+    proximo_chequeo: float = -1.0   # segundos; -1 = chequeando ahora o continuo
 
     # El proyecto original llamaba a esto "diferencia respecto del fondo".
     # Se mantiene el nombre para que la UI y el harness viejos no se rompan.
@@ -92,6 +95,12 @@ class DetectorHibrido:
         self.seg_entre_inferencias = float(cfg_d["segundos_entre_inferencias"])
         self.cooldown = float(cfg_d["cooldown_alarma"])
         self.margen_recorte = int(cfg_d.get("margen_recorte", 40))
+        # Cada cuántos segundos se mira la zona. 0 = sin pausa, todos los
+        # frames (el comportamiento original).
+        self.intervalo_chequeo = float(cfg_d.get("intervalo_chequeo", 0))
+        # Tope de un chequeo: si en este tiempo no se pudo concluir (alguien
+        # con la mano encima de la hoja), se abandona hasta el próximo.
+        self.max_seg_chequeo = float(cfg_d.get("max_segundos_chequeo", 30))
 
         # --- estado interno ---
         self.mascara_roi: np.ndarray | None = None
@@ -100,7 +109,7 @@ class DetectorHibrido:
         self.quieto_desde: float | None = None
         self.confirmaciones = 0
         self.ultima_inferencia = 0.0
-        self.ultima_alarma = 0.0
+        self.ultima_alarma = float("-inf")   # nunca hubo alarma
         self.estado = Estado.CALIBRANDO
 
         # --- inferencia asíncrona ---
@@ -118,6 +127,19 @@ class DetectorHibrido:
         self._conf_ultima = 0.0
         self._ultimo_color = ResultadoColor()
         self._ultimo_veredicto: Veredicto | None = None
+
+        # --- chequeo periódico ---
+        # Un "chequeo" es un ciclo corto: comparar la zona contra la
+        # referencia y, si cambió, esperar a que quede quieta y consultar al
+        # modelo hasta tener veredicto. Entre chequeo y chequeo no se analiza.
+        self._ciclo_desde: float | None = None   # None = no hay chequeo abierto
+        self._inferencias_ciclo = 0
+        self._proximo_chequeo = 0.0              # 0 = chequear ya
+        self._resultado_chequeo = ""
+        # Cómo se veía la zona cuando se llegó al último veredicto. Entre
+        # chequeos no se mira, así que es la única forma de saber si alguien
+        # cambió el objeto mientras tanto.
+        self._gris_conclusion: np.ndarray | None = None
 
         # --- concurrencia ---
         # procesar() corre en un hilo del pool (server.py hace
@@ -196,6 +218,68 @@ class DetectorHibrido:
             self.confirmaciones = 0
             self._ultimo_color = ResultadoColor()
             self.estado = Estado.CALIBRANDO
+            # Recién calibrado se chequea enseguida, sin esperar el intervalo.
+            self._ciclo_desde = None
+            self._proximo_chequeo = 0.0
+            self._resultado_chequeo = ""
+            self._gris_conclusion = None
+
+    # ------------------------------------------------------ chequeo periódico
+    @property
+    def periodico(self) -> bool:
+        return self.intervalo_chequeo > 0
+
+    def _abrir_ciclo(self, ahora: float, gris: np.ndarray) -> None:
+        self._ciclo_desde = ahora
+        self._inferencias_ciclo = 0
+        self.confirmaciones = 0
+        self.quieto_desde = None
+
+        # Si desde el último veredicto la zona cambió (sacaron el lápiz y
+        # pusieron otra cosa mientras no mirábamos), ese veredicto ya no vale:
+        # hay que volver a preguntar. Si no cambió, se reutiliza tal cual.
+        if self.estado in (Estado.DIARIO, Estado.DESCARTADO) and (
+            self._gris_conclusion is None
+            or self._fraccion_distinta(self._gris_conclusion, gris) > self.umbral_mov
+        ):
+            self.estado = Estado.VIGILANDO
+            self._ultimo_veredicto = None
+
+    def _cerrar_ciclo(self, ahora: float, resultado: str) -> None:
+        """Termina el chequeo en curso y agenda el próximo."""
+        if not self.periodico or self._ciclo_desde is None:
+            return
+        self._ciclo_desde = None
+        self._proximo_chequeo = ahora + self.intervalo_chequeo
+        self._resultado_chequeo = resultado
+        if self.frame_anterior is not None:
+            self._gris_conclusion = self.frame_anterior.copy()
+
+    def chequear_ya(self, olvidar_veredicto: bool = False) -> None:
+        """Adelanta el próximo chequeo a ahora mismo.
+
+        Con olvidar_veredicto (se cambió el prompt), además descarta lo que
+        se había concluido: un "lápiz presente" no dice nada si ahora se busca
+        otra cosa, y sin esto el chequeo siguiente lo daría por bueno sin
+        volver a consultar al modelo.
+        """
+        with self._lock:
+            self.confirmaciones = 0
+            self._ciclo_desde = None
+            self._proximo_chequeo = 0.0
+            if olvidar_veredicto:
+                self.ultima_alarma = float("-inf")
+                self._ultimo_veredicto = None
+                self._resultado_chequeo = ""
+                if self.estado in (Estado.DIARIO, Estado.DESCARTADO):
+                    self.estado = Estado.VIGILANDO
+
+    def segundos_para_chequeo(self, ahora: float) -> float:
+        """Cuánto falta para el próximo chequeo. -1 si hay uno en curso o si
+        no hay chequeo periódico."""
+        if not self.periodico or self._ciclo_desde is not None:
+            return -1.0
+        return max(0.0, self._proximo_chequeo - ahora)
 
     # ------------------------------------------------------------ pre-proceso
     def _gris(self, frame: np.ndarray) -> np.ndarray:
@@ -278,8 +362,9 @@ class DetectorHibrido:
             hay_cambio_color=self._ultimo_color.hay_cambio,
             papel=self._ultimo_color.papel,
             conf_modelo=conf,
-            umbral_papel=self.color.papel_minimo,
+            umbral_papel=self.color.umbral_papel,
             umbral_modelo=self.owl.umbral,
+            nombre=self.nombre,
         )
 
     def resolver_inferencia(self, conf: float, cajas: list) -> None:
@@ -288,6 +373,12 @@ class DetectorHibrido:
             self._cajas_modelo = cajas
             self._conf_ultima = conf
             self._cajas_hasta = time.time() + self.segundos_persistencia
+
+            # Un resultado que llega cuando su chequeo ya se cerró (se
+            # recalibró, o se venció el tiempo) solo se muestra: no decide.
+            if (self.periodico and not self.modo_continuo
+                    and self._ciclo_desde is None):
+                return
 
             veredicto = self._fusionar(conf)
             self._ultimo_veredicto = veredicto
@@ -298,6 +389,7 @@ class DetectorHibrido:
                 )
                 return
 
+            self._inferencias_ciclo += 1
             if veredicto.es_diario:
                 self.confirmaciones += 1
             else:
@@ -310,9 +402,14 @@ class DetectorHibrido:
                     self.estado = Estado.DIARIO
                 # si no: seguimos en cooldown, no generamos un nuevo flanco
                 # de alarma en el server. self.estado queda como estaba.
+                self._cerrar_ciclo(ahora, f"{self.nombre.capitalize()} detectado.")
             elif self._ultimo_color.hay_cambio and not veredicto.modelo_ok:
-                # Hay un objeto sobre la alfombra, pero no es un diario.
+                # Hay un objeto en la zona, pero no es el que buscamos.
                 self.estado = Estado.DESCARTADO
+                if self._inferencias_ciclo >= self.confirmaciones_necesarias:
+                    self._cerrar_ciclo(
+                        ahora, f"Hay algo en la zona, pero no es {self.nombre}."
+                    )
 
     # ---------------------------------------------------------------- público
     def procesar(self, frame: np.ndarray) -> Resultado:
@@ -361,7 +458,7 @@ class DetectorHibrido:
         ahora = time.time()
         gris = self._gris(frame)
 
-        # --- [0] calibración: aprendemos cómo es la alfombra vacía ---
+        # --- [0] calibración: aprendemos cómo es la zona vacía ---
         if not self.color.calibrado:
             self.frame_anterior = gris.copy()
             listo = self.color.alimentar_calibracion(frame)
@@ -372,8 +469,34 @@ class DetectorHibrido:
             self.estado = Estado.CALIBRANDO
             return self._armar(
                 Estado.CALIBRANDO,
-                f"Calibrando alfombra vacía… {hechos}/{total}", 0.0,
+                f"Calibrando zona vacía… {hechos}/{total}", 0.0,
             )
+
+        # --- [0b] chequeo periódico ---
+        if self.periodico:
+            if self._ciclo_desde is None:
+                # Entre chequeos no se analiza nada; solo se guarda el frame
+                # para que el próximo chequeo pueda medir movimiento.
+                self.frame_anterior = gris.copy()
+                if ahora < self._proximo_chequeo:
+                    falta = self._proximo_chequeo - ahora
+                    return self._armar(
+                        self.estado,
+                        f"{self._resultado_chequeo} Próximo chequeo en {falta:.0f}s."
+                        .strip(),
+                        0.0,
+                    )
+                self._abrir_ciclo(ahora, gris)
+            elif (ahora - self._ciclo_desde > self.max_seg_chequeo
+                    and not self.inferencia_activa):
+                # No se pudo concluir (había movimiento todo el tiempo).
+                # Se conserva el último veredicto y se reintenta más tarde.
+                if self.estado not in (Estado.DIARIO, Estado.DESCARTADO):
+                    self.estado = Estado.VIGILANDO
+                self._cerrar_ciclo(
+                    ahora, "Chequeo sin conclusión: había movimiento en la zona."
+                )
+                return self._armar(self.estado, self._resultado_chequeo, 0.0)
 
         # --- [1] movimiento ---
         movimiento = 0.0
@@ -397,8 +520,9 @@ class DetectorHibrido:
             self.confirmaciones = 0
             self._ultimo_veredicto = None
             self.estado = Estado.VIGILANDO
+            self._cerrar_ciclo(ahora, "Sin cambios en la zona.")
             return self._armar(
-                Estado.VIGILANDO, "Sin novedad sobre la alfombra.", movimiento
+                Estado.VIGILANDO, "Sin cambios en la zona.", movimiento
             )
 
         # En modo solo_color no hay etapa 3: el color decide y listo.
@@ -414,13 +538,25 @@ class DetectorHibrido:
                 # generamos un nuevo flanco de alarma).
             else:
                 self.estado = Estado.DESCARTADO
+            explic = veredicto.explicacion
+            self._cerrar_ciclo(ahora, explic[:1].upper() + explic[1:] + ".")
             return self._armar(self.estado, veredicto.explicacion, movimiento)
 
         # --- ya confirmado: no volvemos a molestar al modelo ---
         if self.estado == Estado.DIARIO:
-            return self._armar(
-                Estado.DIARIO, f"{self.nombre.capitalize()} presente.", movimiento
-            )
+            msg = f"{self.nombre.capitalize()} presente."
+            self._cerrar_ciclo(ahora, msg)
+            return self._armar(Estado.DIARIO, msg, movimiento)
+
+        # --- mismo objeto descartado que en el chequeo anterior ---
+        # (_abrir_ciclo ya lo habría olvidado si la zona hubiera cambiado).
+        # Solo al arrancar el chequeo: dentro de uno, DESCARTADO aparece tras
+        # la primera inferencia negativa y todavía falta confirmarlo.
+        if (self.periodico and self.estado == Estado.DESCARTADO
+                and self._inferencias_ciclo == 0):
+            msg = f"Sigue el mismo objeto: no es {self.nombre}."
+            self._cerrar_ciclo(ahora, msg)
+            return self._armar(Estado.DESCARTADO, msg, movimiento)
 
         # --- [2b] esperamos a que la escena se quede quieta ---
         if self.quieto_desde is None:
@@ -431,8 +567,7 @@ class DetectorHibrido:
             self.estado = Estado.ESTABILIZANDO
             return self._armar(
                 Estado.ESTABILIZANDO,
-                f"Objeto nuevo (ΔE={self._ultimo_color.delta_e:.0f}, "
-                f"papel={self._ultimo_color.papel:.2f}). "
+                f"Objeto nuevo (ΔE={self._ultimo_color.delta_e:.0f}). "
                 f"Estabilizando {estable:.1f}/{self.seg_estabilidad:.0f}s",
                 movimiento,
             )
@@ -476,4 +611,5 @@ class DetectorHibrido:
             modelo_ok=ver.modelo_ok if ver else False,
             cajas=col.cajas,
             confirmaciones=self.confirmaciones,
+            proximo_chequeo=round(self.segundos_para_chequeo(time.time()), 1),
         )

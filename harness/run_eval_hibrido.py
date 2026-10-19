@@ -2,13 +2,19 @@
 """
 Harness de evaluación del detector híbrido.
 
-Corre dos bancos de casos y arma una matriz de confusión:
+Corre tres bancos de casos y arma una matriz de confusión:
 
-  1. Casos sintéticos, generados acá mismo con una semilla fija. Sirven de
-     test de regresión: no dependen de ninguna foto y cubren los tres modos
-     de fallar que importan (sombra, objeto de otro color, ruido de sensor).
+  1. Diario sobre alfombra, sintético con semilla fija. Test de regresión
+     del perfil "diario" (exige que el objeto parezca papel): cubre sombra,
+     objeto de otro color y ruido de sensor.
 
-  2. Pares reales, si los hay. Poné carpetas en data/pares/ así:
+  2. Hoja blanca sobre escritorio, sintético con semilla fija. Prueba SOLO la
+     etapa de color con el perfil genérico (sin exigir papel): que un lápiz y
+     una birome negra se vean como cambio, y que la sombra de una mano no. Qué
+     objeto es lo decide el modelo con el prompt de la web; eso no se evalúa
+     acá porque depende de cada prompt.
+
+  3. Pares reales, si los hay. Poné carpetas en data/pares/ así:
 
         data/pares/diario_lluvia/fondo.jpg   + actual.jpg
         data/pares/vacio_noche/fondo.jpg     + actual.jpg
@@ -39,8 +45,11 @@ from fusion import Fusion  # noqa: E402
 from validador_color import ValidadorColor  # noqa: E402
 
 
-def casos_sinteticos() -> list[tuple[str, np.ndarray, np.ndarray, bool]]:
-    """Genera el banco sintético. Semilla fija => siempre el mismo resultado."""
+Caso = tuple[str, np.ndarray, np.ndarray, bool, str]   # (..., perfil)
+
+
+def casos_sinteticos() -> list[Caso]:
+    """Genera el banco del diario. Semilla fija => siempre el mismo resultado."""
     rng = np.random.default_rng(7)
     H, W = 480, 854
 
@@ -73,14 +82,58 @@ def casos_sinteticos() -> list[tuple[str, np.ndarray, np.ndarray, bool]]:
     ).astype(np.uint8)
 
     return [
-        ("sint: diario sobre la alfombra", alfombra, diario, True),
-        ("sint: solo una sombra", alfombra, sombra, False),
-        ("sint: objeto rojo (no es papel)", alfombra, rojo, False),
-        ("sint: escena igual + ruido", alfombra, igual, False),
+        ("sint: diario sobre la alfombra", alfombra, diario, True, "diario"),
+        ("sint: solo una sombra", alfombra, sombra, False, "diario"),
+        ("sint: objeto rojo (no es papel)", alfombra, rojo, False, "diario"),
+        ("sint: escena igual + ruido", alfombra, igual, False, "diario"),
     ]
 
 
-def casos_reales(carpeta: Path) -> list[tuple[str, np.ndarray, np.ndarray, bool]]:
+def casos_hoja() -> list[Caso]:
+    """Hoja blanca sobre un escritorio de madera, con distintos objetos."""
+    rng = np.random.default_rng(11)
+    H, W = 480, 854
+
+    def foto(img):
+        return np.clip(img + rng.normal(0, 3, img.shape), 0, 255).astype(np.uint8)
+
+    mesa = np.zeros((H, W, 3), np.float32)
+    mesa[:] = (60, 105, 150)
+    vacia = mesa.copy()
+    vacia[90:400, 260:595] = (232, 236, 240)          # la hoja
+
+    # lápiz amarillo con goma rosa y punta de madera, inclinado
+    lapiz = vacia.copy()
+    cuerpo = np.array([[330, 235], [500, 265], [497, 280], [327, 250]], np.int32)
+    cv2.fillPoly(lapiz, [cuerpo], (30, 195, 240))
+    cv2.fillPoly(lapiz, [np.array([[315, 232], [330, 235], [327, 250],
+                                   [312, 247]], np.int32)], (170, 150, 235))
+    cv2.fillPoly(lapiz, [np.array([[500, 265], [530, 276], [497, 280]],
+                                  np.int32)], (140, 185, 215))
+
+    # birome negra: oscura y SIN color, lo que la regla de sombras de antes
+    # confundía con una sombra
+    birome = vacia.copy()
+    cv2.fillPoly(birome, [np.array([[345, 300], [530, 260], [533, 270],
+                                    [348, 310]], np.int32)], (28, 28, 30))
+
+    # sombra de una mano: oscurece ~38% y suave, sin cambiar el tono
+    sombra = vacia.copy()
+    m = np.zeros((H, W), np.float32)
+    cv2.ellipse(m, (470, 220), (110, 75), 20, 0, 360, 1.0, -1)
+    m = cv2.GaussianBlur(m, (61, 61), 0)
+    sombra *= 1 - 0.38 * m[..., None]
+
+    fondo = foto(vacia)
+    return [
+        ("hoja: lápiz apoyado", fondo, foto(lapiz), True, "hoja"),
+        ("hoja: birome negra", fondo, foto(birome), True, "hoja"),
+        ("hoja: sombra de una mano", fondo, foto(sombra), False, "hoja"),
+        ("hoja: vacía + ruido", fondo, foto(vacia), False, "hoja"),
+    ]
+
+
+def casos_reales(carpeta: Path) -> list[Caso]:
     if not carpeta.exists():
         return []
     fuera = []
@@ -96,7 +149,8 @@ def casos_reales(carpeta: Path) -> list[tuple[str, np.ndarray, np.ndarray, bool]
             continue
         if a.shape != b.shape:
             a = cv2.resize(a, (b.shape[1], b.shape[0]))
-        fuera.append((f"real: {sub.name}", a, b, sub.name.startswith("diario")))
+        fuera.append((f"real: {sub.name}", a, b, sub.name.startswith("diario"),
+                      "diario"))
     return fuera
 
 
@@ -125,23 +179,25 @@ def main() -> int:
         owl.cargar()
 
     print(f"\nHarness híbrido — modo de fusión: {modo}")
-    casos = casos_sinteticos() + casos_reales(Path(args.pares))
+    casos = casos_sinteticos() + casos_hoja() + casos_reales(Path(args.pares))
     print(f"{len(casos)} caso(s)\n")
 
     fusion = Fusion(cfg["fusion"])
+    solo_color = Fusion({"modo": "solo_color"})
     vp = vn = fp = fn = 0
     detalles = []
 
     print(f"{'caso':40} {'espera':7} {'da':7} {'ΔE':>6} {'papel':>6} {'conf':>6}")
     print("-" * 82)
 
-    for nombre, fondo, actual, esperado in casos:
-        color = ValidadorColor(cfg["color"])
+    for nombre, fondo, actual, esperado, perfil in casos:
+        es_hoja = perfil == "hoja"
+        color = ValidadorColor({**cfg["color"], "exigir_papel": not es_hoja})
         color.fijar_fondo(fondo)
         rc = color.analizar(actual)
 
         conf = 0.0
-        if owl is not None and (rc.hay_cambio or modo != "cascada"):
+        if owl is not None and not es_hoja and (rc.hay_cambio or modo != "cascada"):
             alto, ancho = actual.shape[:2]
             caja = color.bbox_regiones(
                 rc, cfg["deteccion"].get("margen_recorte", 40), alto, ancho
@@ -150,9 +206,9 @@ def main() -> int:
             if recorte.size:
                 conf, _ = owl.detectar(recorte)
 
-        ver = fusion.evaluar(
+        ver = (solo_color if es_hoja else fusion).evaluar(
             rc.score, rc.hay_cambio, rc.papel, conf,
-            color.papel_minimo, float(cfg["modelo"]["confianza_minima"]),
+            color.umbral_papel, float(cfg["modelo"]["confianza_minima"]),
         )
 
         if ver.es_diario and esperado:
