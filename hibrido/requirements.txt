@@ -24,3 +24,7 @@ requests>=2.31.0          # webhook a n8n (igual que el proyecto original)
 # desde el fork de Ultralytics, que es el que espera su código.
 ultralytics==8.4.182
 clip @ git+https://github.com/ultralytics/CLIP.git
+
+# Motor "claude" (opcional): verifica el objeto con la API de Anthropic.
+# Necesita ANTHROPIC_API_KEY en el entorno del servidor.
+anthropic>=1.15.0

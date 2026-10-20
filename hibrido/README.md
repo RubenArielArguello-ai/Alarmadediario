@@ -17,8 +17,8 @@ nuevo vive en esta carpeta.
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r hibrido/requirements.txt
-python hibrido/descargar_modelo.py           # YOLO-World: ~375 MB, una sola vez
-python hibrido/descargar_modelo.py --todos   # además OWLv2: ~620 MB más
+python hibrido/descargar_modelo.py           # OWLv2 (el default): ~620 MB, una sola vez
+python hibrido/descargar_modelo.py --todos   # además YOLO-World: ~375 MB más
 ```
 
 Los pesos quedan en `hibrido/modelos_yolo/` (YOLO-World y su codificador de
@@ -82,7 +82,7 @@ frame de cámara (fija)
      |   ¿cambió algo en la zona respecto de cuando estaba vacía?
      |   si no ve nada, acá se corta y el modelo nunca se despierta
      v
-[3] modelo: YOLO-World (~0.6 s) u OWLv2 (~1-9 s según resolución)
+[3] modelo: OWLv2 local (~0.8 s a 320) o Claude en la nube
      |   ¿eso que hay ahí es lo que dice el prompt?
      |   recibe SOLO el recorte que marcó el color, no el frame entero
      v
@@ -136,48 +136,83 @@ gris una sombra y un diario se parecen demasiado. Este compara en espacio
   Para cualquier otro objeto se deja apagado: un lápiz no parece papel, y qué
   objeto es lo decide el modelo con el prompt.
 
-### Validador 2 — el modelo (`modelo_yolo.py`, `modelo.py`)
+### Validador 2 — el modelo (`modelo.py`, `modelo_claude.py`, `modelo_yolo.py`)
 
-Detectores de vocabulario abierto: aceptan descripciones en texto libre
-(`"a rolled newspaper"`) y devuelven cajas, sin entrenar nada. Qué buscan se
-cambia desde la web, en caliente. Hay dos, y se elige cuál con
-`modelo.motor` en `config.json` o con `python hibrido/server.py --motor owlv2`:
+Reciben el recorte de lo que cambió y deciden si es el objeto buscado. Qué se
+busca se cambia desde la web, en caliente. Se elige el motor con
+`modelo.motor` en `config.json`, o con `python hibrido/server.py --motor claude`:
 
-| motor | tiempo por consulta* | diario real | lápiz | birome (no) | zona vacía (no) | umbral |
-|---|---|---|---|---|---|---|
-| **YOLO-World S @ 640** (default) | **~0.6 s** | 0.12 | 0.04 | 0.004 | 0.000 | 0.03 |
-| OWLv2 @ 640 | ~9.4 s | 0.95 | 0.90 | 0.10 | 0.00 | 0.37 |
-| OWLv2 @ 480 | ~3.8 s | 0.93 | 0.85 | 0.17 | 0.01 | 0.37 |
-| OWLv2 @ 320 | ~1.2 s | 0.81 | 0.77 | 0.17 | 0.03 | 0.37 |
+| motor | dónde corre | tiempo por consulta* | prompt en español | costo |
+|---|---|---|---|---|
+| **`owlv2`** (default) a 320 | local | ~0.8 s | no | gratis |
+| `claude` | API de Anthropic | a medir con tu clave | **sí** | por consulta |
+| `yolo_world` | local | ~0.6 s | no | gratis |
 
-\* Mac Intel i7-7567U (2 núcleos), sobre el recorte que arma el validador de
-color. El lápiz y la birome son dibujados; el diario y la zona vacía, fotos
-reales de la entrada.
+\* Mac Intel i7-7567U de 2 núcleos.
 
-YOLO-World es 15 veces más rápido. La separación entre lo que es y lo que no
-es parecida en los dos (unas 10 veces), pero en YOLO-World todo vive en números
-diez o veinte veces más chicos, así que un poco de ruido pesa mucho más. Por eso cada motor tiene su propio
-umbral en su sección de `config.json`, y **el de YOLO-World es lo primero que
-hay que calibrar con la cámara real**: activá `Mostrar detecciones débiles` en
-la web para ver los puntajes de lo que apoyás.
+**Medido con fotos reales** de un escritorio (cámara del iPhone), sobre el
+recorte que arma el validador de color:
 
-Cosas medidas que conviene saber de YOLO-World:
+| | birome | birome | anteojos (no) | tiempo |
+|---|---|---|---|---|
+| OWLv2 @ 320, `a pen` + `a ballpoint pen` | **0.58** | **0.48** | **0.07** | 0.8 s |
+| OWLv2 @ 480 | 0.25 | 0.27 | 0.14 | 2.0 s |
+| OWLv2 @ 640 | 0.48 | 0.21 | 0.05 | 4–7 s |
+| YOLO-World S @ 640, `pen` | 0.04 | — | **0.08** | 0.6 s |
 
-- Con más contexto alrededor del objeto, o con la foto entera, reconoce
-  **peor**: el diario real baja de 0.14 a 0.01. Por eso recibe el mismo
-  recorte que OWLv2.
-- El prompt importa mucho: sobre el mismo recorte, el lápiz dio 0.009 con
-  `pencil` solo y 0.042 con `pencil` + `yellow pencil`.
-- Los modelos más grandes (`yolov8m`, `yolov8l`) no reconocieron mejor el
-  diario y tardan 3–4 veces más.
-- Cambiar el prompt tarda ~7 s (CLIP codifica el texto); corre en paralelo y
-  no congela el video.
-- Ultralytics manda por defecto estadísticas de uso (CPU, versiones; no
-  imágenes) a Google Analytics. La app lo apaga al cargar el modelo, solo para
-  su proceso.
+- **OWLv2 a 320** separa mejor que a 640 y tarda lo mismo que YOLO-World. Con
+  la foto *entera*, 320 daba falsos positivos; con el recorte, es la que mejor
+  anda. Umbral 0.25.
+- **YOLO-World no sirve para esto**: a unos anteojos les dio más puntaje de
+  "pen" que a una birome real. Cuando lo equivocado puntúa más alto que lo
+  correcto no hay umbral que lo arregle. Queda como opción, pero no se
+  recomienda.
+- **Los prompts de OWLv2 y YOLO-World van en inglés**: con OWLv2, `un lápiz`
+  dio 0.02 contra 0.90 de `a pencil`.
+- Límite de OWLv2 a 320, visto en simulación: distingue peor objetos parecidos
+  (una birome negra, buscando un lápiz, dio 0.33).
+- Ultralytics (YOLO-World) manda por defecto estadísticas de uso a Google
+  Analytics; la app lo apaga al cargar el modelo, solo para su proceso.
 
-**Los prompts van en inglés.** En español ninguno de los dos entiende: con
-OWLv2, `un lápiz` dio 0.02 contra 0.90 de `a pencil`.
+#### El motor `claude`
+
+Le manda el recorte a Claude con el objeto buscado y recibe un veredicto en
+JSON validado contra un esquema: si está, con qué probabilidad, dónde y qué
+ve. Entiende la descripción **en español** (`birome`, `lápiz`) y distingue
+objetos parecidos. Modelo por defecto `claude-opus-5-5` con esfuerzo `low`;
+se cambia en `modelo.claude` (Sonnet 5.5 o Haiku 5.5 son más baratos).
+
+- **Necesita una clave de la API** en el entorno del servidor:
+  `export ANTHROPIC_API_KEY=...` en la misma Terminal donde se arranca. Sin
+  ella, el servidor avisa al arrancar. Nunca va en archivos del repo.
+- **Las imágenes salen de la máquina**: cada consulta sube el recorte (no el
+  video) a la API de Anthropic.
+- **Cuesta por consulta**, pero solo se consulta cuando el color vio algo
+  nuevo, y con una sola confirmación. El servidor imprime los tokens y una
+  estimación del gasto de cada consulta.
+- Un error de red o de la API **no** se toma como "no está": se registra y el
+  chequeo se reintenta.
+- Si el modelo declina una consulta, la API la reintenta en otro modelo
+  (`fallbacks: "default"`); Haiku no tiene ese respaldo.
+
+### Cuando cambia la escena
+
+Tres reglas que evitan falsas alarmas vistas en la prueba real, con cualquier
+motor:
+
+- **Solo cuenta lo que está sobre lo nuevo.** Una detección del modelo vale
+  si su centro cae dentro de la zona y al menos un 10% de su caja cambió
+  (`deteccion.solape_minimo`). El recorte tiene margen y puede incluir cosas
+  que ya estaban: una falsa alarma vino de un control remoto al borde de la
+  hoja.
+- **Si cambia casi toda la zona, se recalibra.** Más del 60%
+  (`color.cobertura_maxima`) no es un objeto: se movió la hoja o la cámara, o
+  cambió la luz. Se espera a que quede quieta y se recalibra.
+- **Lo que no es el objeto y no se mueve pasa al fondo.** Si dos chequeos
+  seguidos ven algo que no es lo buscado, y la zona no cambió entre medio, se
+  incorpora a la referencia. Así se absorbe una cámara o una hoja que se
+  corrió un poco, o algo que alguien dejó. Lo que sí es el objeto buscado
+  nunca se absorbe.
 
 ### Fusión (`fusion.py`)
 

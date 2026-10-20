@@ -77,6 +77,11 @@ def main() -> int:
     modelo = json.loads(RUTA_CONFIG.read_text())["modelo"]
     motores = ["yolo_world", "owlv2"] if args.todos else [modelo.get("motor", "owlv2")]
 
+    if motores == ["claude"]:
+        print("El motor 'claude' corre en la nube: no hay nada que descargar.")
+        print("Necesita ANTHROPIC_API_KEY en el entorno del servidor.")
+        return 0
+
     for motor in motores:
         cfg = config_motor({**modelo, "motor": motor})
         error = bajar_yolo_world(cfg) if motor == "yolo_world" else bajar_owlv2(cfg)

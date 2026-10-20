@@ -53,7 +53,7 @@ def main() -> int:
     ap.add_argument("--modo", help="cascada | and | or | ponderado | solo_color | solo_modelo")
     ap.add_argument("--sin-modelo", action="store_true",
                     help="Atajo para --modo solo_color (no carga ningún modelo)")
-    ap.add_argument("--motor", choices=("yolo_world", "owlv2"),
+    ap.add_argument("--motor", choices=("owlv2", "yolo_world", "claude"),
                     help="Qué modelo reconoce el objeto (default: el de config.json)")
     ap.add_argument("--salida", default=str(AQUI / "capturas"))
     ap.add_argument("--comparar", action="store_true",

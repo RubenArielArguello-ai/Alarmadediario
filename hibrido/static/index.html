@@ -171,7 +171,7 @@
         <h2>Qué busca el modelo</h2>
         <label>Nombre para la alarma</label>
         <input type="text" id="obj-nombre" value="diario">
-        <label>Descripciones en inglés (una por línea)</label>
+        <label id="lbl-prompts">Descripciones en inglés (una por línea)</label>
         <textarea id="obj-prompts" rows="3">a rolled newspaper
 a newspaper
 a folded newspaper</textarea>
@@ -603,12 +603,28 @@ $('s-int').addEventListener('input', e => {
 
 // Los puntajes de cada motor viven en escalas distintas: un 0.12 es una buena
 // detección para YOLO-World y ruido para OWLv2. Por eso cada uno tiene sus avisos.
-const NOMBRE_MOTOR = {yolo_world: 'YOLO-World', owlv2: 'OWLv2'};
+const NOMBRE_MOTOR = {yolo_world: 'YOLO-World', owlv2: 'OWLv2', claude: 'Claude'};
 let motorActual = 'owlv2';
 
 function avisoConfianza() {
   if (motorActual === 'yolo_world') return avisoConfianzaYolo();
+  if (motorActual === 'claude') return avisoConfianzaClaude();
   avisoConfianzaOwl();
+}
+
+// Con Claude el puntaje sí es una probabilidad que estima el modelo.
+function avisoConfianzaClaude() {
+  const el = $('aviso-conf');
+  if (umbralActual >= 0.9) {
+    el.innerHTML = '<span style="color:var(--warn)">Muy exigente: solo avisa ' +
+      'si el modelo está casi seguro.</span>';
+  } else if (umbralActual >= 0.5) {
+    el.innerHTML = '<span style="color:var(--ok)">Con Claude el puntaje es la ' +
+      'probabilidad de que el objeto esté. Zona recomendada.</span>';
+  } else {
+    el.innerHTML = '<span style="color:var(--warn)">Avisa aunque el modelo crea ' +
+      'que es más probable que NO esté.</span>';
+  }
 }
 
 function avisoConfianzaYolo() {
@@ -710,6 +726,11 @@ fetch('/api/config').then(r => r.json()).then(c => {
   const mc = Object.assign({}, c.modelo, c.modelo[motorActual] || {});
   $('tit-motor').textContent = NOMBRE_MOTOR[motorActual];
   $('h2-motor').textContent = NOMBRE_MOTOR[motorActual];
+  if (motorActual === 'claude') {
+    $('lbl-prompts').textContent = 'Descripciones (una por línea; podés escribir en español)';
+    $('msg-obj').textContent = 'Claude entiende español. Al cambiarlo se hace un ' +
+      'chequeo enseguida. Cada consulta sube el recorte de la imagen a la API de Anthropic.';
+  }
   $('s-conf').value = mc.confianza_minima;
   $('l-conf').textContent = mc.confianza_minima;
   umbralActual = mc.confianza_minima;

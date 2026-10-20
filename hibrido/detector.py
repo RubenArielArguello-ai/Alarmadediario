@@ -35,7 +35,7 @@ import cv2
 import numpy as np
 
 from fusion import Fusion, Modo, Veredicto
-from modelo import crear_motor
+from modelo import config_motor, crear_motor
 from validador_color import ValidadorColor, ResultadoColor
 
 
@@ -92,7 +92,12 @@ class DetectorHibrido:
 
         self.umbral_mov = float(cfg_d["umbral_movimiento"])
         self.seg_estabilidad = float(cfg_d["segundos_estabilidad"])
-        self.confirmaciones_necesarias = int(cfg_d["confirmaciones_necesarias"])
+        # Cada motor puede pedir su propia cantidad: con Claude alcanza con una
+        # consulta (y cada una cuesta); los modelos locales necesitan dos.
+        self.confirmaciones_necesarias = int(
+            config_motor(config["modelo"]).get(
+                "confirmaciones_necesarias", cfg_d["confirmaciones_necesarias"])
+        )
         self.seg_entre_inferencias = float(cfg_d["segundos_entre_inferencias"])
         self.cooldown = float(cfg_d["cooldown_alarma"])
         self.margen_recorte = int(cfg_d.get("margen_recorte", 40))

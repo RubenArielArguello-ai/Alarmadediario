@@ -198,7 +198,7 @@ class DetectorOWL:
 
 
 # ---------------------------------------------------------------- motores
-MOTORES = ("yolo_world", "owlv2")
+MOTORES = ("owlv2", "yolo_world", "claude")
 
 
 def config_motor(config_modelo: dict) -> dict:
@@ -225,6 +225,10 @@ def crear_motor(config_modelo: dict):
         from modelo_yolo import DetectorYoloWorld
 
         return DetectorYoloWorld(cfg)
+    if motor == "claude":
+        from modelo_claude import DetectorClaude
+
+        return DetectorClaude(cfg)
     if motor == "owlv2":
         return DetectorOWL(cfg)
     raise ValueError(f"motor desconocido: {motor!r} (opciones: {', '.join(MOTORES)})")
