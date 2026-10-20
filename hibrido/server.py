@@ -16,6 +16,7 @@ Uso:
     python server.py --camara 1 --puerto 8080
     python server.py --modo solo_color      # sin modelo, como el proyecto viejo
     python server.py --motor claude         # verifica con Claude (necesita ANTHROPIC_API_KEY)
+    python server.py --motor openrouter     # verifica vía OpenRouter (necesita OPENROUTER_API_KEY)
 """
 
 from __future__ import annotations
@@ -445,7 +446,7 @@ def main() -> None:
     ap.add_argument("--puerto", type=int, default=8000)
     ap.add_argument("--device", help="mps | cuda | cpu")
     ap.add_argument("--modo", help="cascada | and | or | ponderado | solo_color | solo_modelo")
-    ap.add_argument("--motor", choices=("owlv2", "yolo_world", "claude"),
+    ap.add_argument("--motor", choices=("owlv2", "yolo_world", "claude", "openrouter"),
                     help="qué modelo reconoce el objeto (default: el de config.json)")
     args = ap.parse_args()
 

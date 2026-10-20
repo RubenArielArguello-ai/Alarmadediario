@@ -603,12 +603,14 @@ $('s-int').addEventListener('input', e => {
 
 // Los puntajes de cada motor viven en escalas distintas: un 0.12 es una buena
 // detección para YOLO-World y ruido para OWLv2. Por eso cada uno tiene sus avisos.
-const NOMBRE_MOTOR = {yolo_world: 'YOLO-World', owlv2: 'OWLv2', claude: 'Claude'};
+const NOMBRE_MOTOR = {yolo_world: 'YOLO-World', owlv2: 'OWLv2', claude: 'Claude',
+                      openrouter: 'OpenRouter'};
+const EN_LA_NUBE = m => m === 'claude' || m === 'openrouter';
 let motorActual = 'owlv2';
 
 function avisoConfianza() {
   if (motorActual === 'yolo_world') return avisoConfianzaYolo();
-  if (motorActual === 'claude') return avisoConfianzaClaude();
+  if (EN_LA_NUBE(motorActual)) return avisoConfianzaClaude();
   avisoConfianzaOwl();
 }
 
@@ -726,10 +728,11 @@ fetch('/api/config').then(r => r.json()).then(c => {
   const mc = Object.assign({}, c.modelo, c.modelo[motorActual] || {});
   $('tit-motor').textContent = NOMBRE_MOTOR[motorActual];
   $('h2-motor').textContent = NOMBRE_MOTOR[motorActual];
-  if (motorActual === 'claude') {
+  if (EN_LA_NUBE(motorActual)) {
     $('lbl-prompts').textContent = 'Descripciones (una por línea; podés escribir en español)';
-    $('msg-obj').textContent = 'Claude entiende español. Al cambiarlo se hace un ' +
-      'chequeo enseguida. Cada consulta sube el recorte de la imagen a la API de Anthropic.';
+    $('msg-obj').textContent = 'Entiende español. Al cambiarlo se hace un chequeo ' +
+      'enseguida. Cada consulta sube el recorte de la imagen a ' +
+      (motorActual === 'claude' ? 'la API de Anthropic.' : 'OpenRouter y al proveedor del modelo.');
   }
   $('s-conf').value = mc.confianza_minima;
   $('l-conf').textContent = mc.confianza_minima;

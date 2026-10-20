@@ -146,6 +146,7 @@ busca se cambia desde la web, en caliente. Se elige el motor con
 |---|---|---|---|---|
 | **`owlv2`** (default) a 320 | local | ~0.8 s | no | gratis |
 | `claude` | API de Anthropic | a medir con tu clave | **sí** | por consulta |
+| `openrouter` | OpenRouter (Claude, Gemini, GPT…) | a medir con tu clave | **sí** | por consulta |
 | `yolo_world` | local | ~0.6 s | no | gratis |
 
 \* Mac Intel i7-7567U de 2 núcleos.
@@ -194,6 +195,22 @@ se cambia en `modelo.claude` (Sonnet 5.5 o Haiku 5.5 son más baratos).
   chequeo se reintenta.
 - Si el modelo declina una consulta, la API la reintenta en otro modelo
   (`fallbacks: "default"`); Haiku no tiene ese respaldo.
+
+#### El motor `openrouter`
+
+Lo mismo que `claude` (mismo prompt, mismo esquema, mismas validaciones), pero
+la consulta va a [OpenRouter](https://openrouter.ai), que con **una sola
+clave** da acceso a modelos de muchos proveedores. Sirve para comparar modelos
+y quedarse con el más barato que acierte. Se elige el modelo en
+`modelo.openrouter.modelo` (default `anthropic/claude-opus-5.5`, el mismo
+Claude al mismo precio por token que directo).
+
+- Necesita `OPENROUTER_API_KEY` en el entorno del servidor.
+- El recorte pasa por OpenRouter **y** por el proveedor del modelo.
+- No hay reintento automático en otro modelo si el modelo declina.
+- El costo real de cada consulta lo informa OpenRouter en la respuesta, y el
+  servidor lo imprime.
+- Pide `require_parameters`: solo usa proveedores que respeten el formato JSON.
 
 ### Cuando cambia la escena
 

@@ -51,7 +51,7 @@
   "modelo": {
     "_que_es": "Validador 2: confirma que el objeto es el que dice el prompt.",
     "motor": "owlv2",
-    "_motor_opciones": "owlv2 (default): local y sin costo; a 320 tarda ~0.8 s por consulta en una Mac Intel i7 de 2 nucleos | claude: verifica con la API de Anthropic; entiende el prompt en espanol y distingue objetos parecidos, pero necesita internet, ANTHROPIC_API_KEY y cada consulta cuesta | yolo_world: local y rapido, pero en una prueba real confundio anteojos con una birome. Cada uno tiene su seccion abajo con su propio umbral y resolucion.",
+    "_motor_opciones": "owlv2 (default): local y sin costo; a 320 tarda ~0.8 s por consulta en una Mac Intel i7 de 2 nucleos | claude: verifica con la API de Anthropic; entiende espanol y distingue objetos parecidos; necesita ANTHROPIC_API_KEY y cada consulta cuesta | openrouter: lo mismo pero via OpenRouter, que con una clave da acceso a Claude, Gemini, GPT y otros; necesita OPENROUTER_API_KEY | yolo_world: local y rapido, pero en una prueba real confundio anteojos con una birome. Cada uno tiene su seccion abajo.",
     "device": "auto",
     "_device_opciones": "auto | mps (Apple Silicon) | cuda | cpu",
     "nombre_objeto": "diario",
@@ -98,6 +98,17 @@
       "_confirmaciones_nota": "Pisa a deteccion.confirmaciones_necesarias para este motor: cada consulta cuesta y una alcanza.",
       "timeout_s": 30,
       "_privacidad": "Cada consulta sube el recorte de la imagen a la API de Anthropic. Necesita ANTHROPIC_API_KEY en el entorno del servidor."
+    },
+    "openrouter": {
+      "modelo": "anthropic/claude-opus-5.5",
+      "_modelo_opciones": "Cualquier modelo de https://openrouter.ai/models con imagen y salida estructurada. Precios al 19/10/2026, US$ por millon de tokens (entrada / salida): anthropic/claude-opus-5.5 4 / 20 | anthropic/claude-sonnet-5.5 2 / 10 | anthropic/claude-haiku-5.5 0.10 / 0.50 | google/gemini-2.5-flash 0.30 / 2.50 | openai/gpt-5-mini 0.25 / 2",
+      "resolucion": 768,
+      "_resolucion_nota": "Lado maximo en pixeles del recorte que se sube.",
+      "confianza_minima": 0.6,
+      "_confianza_nota": "Probabilidad (0 a 1) que estima el modelo de que el objeto este.",
+      "confirmaciones_necesarias": 1,
+      "timeout_s": 30,
+      "_privacidad": "Cada consulta sube el recorte de la imagen a OpenRouter y al proveedor del modelo. Necesita OPENROUTER_API_KEY en el entorno del servidor."
     }
   },
   "fusion": {

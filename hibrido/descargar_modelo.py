@@ -77,9 +77,10 @@ def main() -> int:
     modelo = json.loads(RUTA_CONFIG.read_text())["modelo"]
     motores = ["yolo_world", "owlv2"] if args.todos else [modelo.get("motor", "owlv2")]
 
-    if motores == ["claude"]:
-        print("El motor 'claude' corre en la nube: no hay nada que descargar.")
-        print("Necesita ANTHROPIC_API_KEY en el entorno del servidor.")
+    if motores in (["claude"], ["openrouter"]):
+        clave = "ANTHROPIC_API_KEY" if motores == ["claude"] else "OPENROUTER_API_KEY"
+        print(f"El motor '{motores[0]}' corre en la nube: no hay nada que descargar.")
+        print(f"Necesita {clave} en el entorno del servidor.")
         return 0
 
     for motor in motores:

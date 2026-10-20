@@ -153,11 +153,47 @@ class DetectorClaude:
         """Recibe un recorte BGR. Devuelve (confianza, [caja]) como los otros
         motores. Un error de red o de la API se propaga: el server lo registra
         y el chequeo se reintenta, en vez de tomarlo como "no está"."""
-        if self.client is None:
+        if not self.listo:
             return 0.0, []
+        datos, escala, w, h = self._preparar(frame_bgr)
+        t0 = time.perf_counter()
+        v = self._consultar(datos, w, h)
+        demora = time.perf_counter() - t0
+        if v is None:                          # la consulta fue declinada
+            return 0.0, []
+
+        conf = float(np.clip(v["confianza"], 0.0, 1.0))
+        print(f"[{self.motor.lower()}] {demora:.1f}s  presente={v['presente']}  "
+              f"conf={conf:.2f}  «{v['descripcion']}»")
+        if not v["presente"] and not self.mostrar_debiles:
+            return conf, []
+
+        # Caja en píxeles de la imagen que se subió -> del recorte original.
+        c = v["caja"]
+        x1, y1, x2, y2 = (float(c[k]) / escala for k in ("x1", "y1", "x2", "y2"))
+        alto, ancho = frame_bgr.shape[:2]
+        x1, x2 = sorted((np.clip(x1, 0, ancho), np.clip(x2, 0, ancho)))
+        y1, y2 = sorted((np.clip(y1, 0, alto), np.clip(y2, 0, alto)))
+        if x2 - x1 < 4 or y2 - y1 < 4:
+            # Sin caja usable: el recorte entero, que ya está centrado en lo nuevo.
+            x1, y1, x2, y2 = 0.0, 0.0, float(ancho), float(alto)
+
+        return conf, [{
+            "x1": x1, "y1": y1, "x2": x2, "y2": y2,
+            "label": f"{self.nombre}: {v['descripcion']}"[:60],
+            "conf": conf,
+            "origen": "modelo",
+        }]
+
+    @property
+    def listo(self) -> bool:
+        return self.client is not None
+
+    def _consultar(self, datos: str, w: int, h: int) -> dict | None:
+        """Hace la consulta a la API de Anthropic. Devuelve el veredicto, o
+        None si el modelo la declinó."""
         import anthropic
 
-        datos, escala, w, h = self._preparar(frame_bgr)
         params = dict(
             model=self.modelo,
             max_tokens=4096,
@@ -184,50 +220,29 @@ class DetectorClaude:
                                "fue revocada") from e
         except anthropic.APIConnectionError as e:
             raise RuntimeError("sin conexión con la API de Anthropic") from e
-        demora = time.perf_counter() - t0
-        self._registrar(r, demora)
+        self._registrar(r, time.perf_counter() - t0)
 
         if r.stop_reason == "refusal":
-            print(f"[claude] la consulta fue declinada ({getattr(r.stop_details, 'category', None)})")
-            return 0.0, []
+            print(f"[claude] la consulta fue declinada "
+                  f"({getattr(r.stop_details, 'category', None)})")
+            return None
         if r.stop_reason == "max_tokens":
             raise RuntimeError("Claude no terminó la respuesta (max_tokens)")
-
         texto = next((b.text for b in r.content if b.type == "text"), None)
         if texto is None:
             raise RuntimeError("Claude no devolvió el veredicto")
-        v = json.loads(texto)
-
-        conf = float(np.clip(v["confianza"], 0.0, 1.0))
-        print(f"[claude] {demora:.1f}s  presente={v['presente']}  conf={conf:.2f}  "
-              f"«{v['descripcion']}»")
-        if not v["presente"] and not self.mostrar_debiles:
-            return conf, []
-
-        # Caja en píxeles de la imagen que se subió -> del recorte original.
-        c = v["caja"]
-        x1, y1, x2, y2 = (float(c[k]) / escala for k in ("x1", "y1", "x2", "y2"))
-        alto, ancho = frame_bgr.shape[:2]
-        x1, x2 = sorted((np.clip(x1, 0, ancho), np.clip(x2, 0, ancho)))
-        y1, y2 = sorted((np.clip(y1, 0, alto), np.clip(y2, 0, alto)))
-        if x2 - x1 < 4 or y2 - y1 < 4:
-            # Sin caja usable: el recorte entero, que ya está centrado en lo nuevo.
-            x1, y1, x2, y2 = 0.0, 0.0, float(ancho), float(alto)
-
-        return conf, [{
-            "x1": x1, "y1": y1, "x2": x2, "y2": y2,
-            "label": f"{self.nombre}: {v['descripcion']}"[:60],
-            "conf": conf,
-            "origen": "modelo",
-        }]
+        return json.loads(texto)
 
     def _registrar(self, r, demora: float) -> None:
         u = r.usage
         entrada, salida = PRECIOS.get(self.modelo, (0.0, 0.0))
         costo = (u.input_tokens * entrada + u.output_tokens * salida) / 1e6
+        self._sumar(costo, u.input_tokens, u.output_tokens)
+
+    def _sumar(self, costo: float, tok_entrada: int, tok_salida: int) -> None:
         with self._lock:
             self.consultas += 1
             self.gasto_usd += costo
             total, n = self.gasto_usd, self.consultas
-        print(f"[claude] {u.input_tokens} tok entrada, {u.output_tokens} tok salida, "
-              f"~US$ {costo:.4f} (acumulado ~US$ {total:.3f} en {n} consultas)")
+        print(f"[{self.motor.lower()}] {tok_entrada} tok entrada, {tok_salida} tok "
+              f"salida, ~US$ {costo:.4f} (acumulado ~US$ {total:.3f} en {n} consultas)")
