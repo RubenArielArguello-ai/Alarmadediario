@@ -30,7 +30,7 @@ for p in (str(AQUI), str(RAIZ_REPO)):
         sys.path.insert(0, p)
 
 from fusion import Fusion  # noqa: E402
-from modelo import DetectorOWL  # noqa: E402
+from modelo import config_motor, crear_motor  # noqa: E402
 from validador_color import ValidadorColor  # noqa: E402
 
 
@@ -44,12 +44,17 @@ def cargar(ruta: str):
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--fondo", required=True, help="Foto de la alfombra vacía")
-    ap.add_argument("--actual", required=True, help="Foto con el posible diario")
+    ap.add_argument("--fondo", required=True, help="Foto de la zona vacía")
+    ap.add_argument("--actual", required=True, help="Foto con el posible objeto")
     ap.add_argument("--config", default=str(AQUI / "config.json"))
+    ap.add_argument("--prompts", nargs="+",
+                    help='Qué buscar, en inglés (ej: --prompts "a pencil")')
+    ap.add_argument("--nombre", help="Nombre del objeto para los mensajes")
     ap.add_argument("--modo", help="cascada | and | or | ponderado | solo_color | solo_modelo")
     ap.add_argument("--sin-modelo", action="store_true",
-                    help="Atajo para --modo solo_color (no carga OWLv2)")
+                    help="Atajo para --modo solo_color (no carga ningún modelo)")
+    ap.add_argument("--motor", choices=("owlv2", "yolo_world", "claude", "openrouter"),
+                    help="Qué modelo reconoce el objeto (default: el de config.json)")
     ap.add_argument("--salida", default=str(AQUI / "capturas"))
     ap.add_argument("--comparar", action="store_true",
                     help="Corre también el detector original en escala de grises")
@@ -60,6 +65,13 @@ def main() -> int:
         cfg["fusion"]["modo"] = "solo_color"
     elif args.modo:
         cfg["fusion"]["modo"] = args.modo
+    if args.motor:
+        cfg["modelo"]["motor"] = args.motor
+    if args.prompts:
+        cfg["modelo"]["prompts"] = args.prompts
+    if args.nombre:
+        cfg["modelo"]["nombre_objeto"] = args.nombre
+    nombre = cfg["modelo"].get("nombre_objeto", "objeto")
 
     try:
         fondo = cargar(args.fondo)
@@ -79,14 +91,15 @@ def main() -> int:
     color.fijar_fondo(fondo)
     res_color = color.analizar(actual)
 
-    print("\n--- 1. Diferencia de color sobre la alfombra ---")
+    print("\n--- 1. Diferencia de color en la zona ---")
     print(f"  ¿apareció algo?  {'sí' if res_color.hay_cambio else 'no'}")
     print(f"  regiones         {len(res_color.regiones)}")
     print(f"  área total       {res_color.area_total} px")
     print(f"  cobertura        {res_color.cobertura * 100:.2f}% de la zona")
     print(f"  ΔE color         {res_color.delta_e:.1f}")
     print(f"  ¿parece papel?   {res_color.papel:.2f}  "
-          f"(umbral {color.papel_minimo:.2f})")
+          + (f"(umbral {color.papel_minimo:.2f})" if color.exigir_papel
+             else "(no se exige)"))
     for i, r in enumerate(res_color.regiones, 1):
         print(f"    región {i}: {r.x2 - r.x1}x{r.y2 - r.y1} px en ({r.x1},{r.y1}), "
               f"área {r.area}, ΔL {r.delta_luz:+.1f}, croma {r.delta_croma:.1f}, "
@@ -98,8 +111,8 @@ def main() -> int:
     usa_modelo = cfg["fusion"]["modo"] != "solo_color"
 
     if usa_modelo and (res_color.hay_cambio or cfg["fusion"]["modo"] != "cascada"):
-        owl = DetectorOWL(cfg["modelo"])
-        print("\n--- 2. OWLv2 ---")
+        owl = crear_motor(cfg["modelo"])
+        print(f"\n--- 2. {owl.motor} ---")
         print("  cargando modelo…")
         owl.cargar()
 
@@ -127,10 +140,10 @@ def main() -> int:
         umbral_modelo = owl.umbral
     else:
         if not usa_modelo:
-            print("\n--- 2. OWLv2 — salteado (modo solo_color) ---")
+            print("\n--- 2. Modelo — salteado (modo solo_color) ---")
         else:
-            print("\n--- 2. OWLv2 — salteado: el color no vio nada (modo cascada) ---")
-        umbral_modelo = float(cfg["modelo"]["confianza_minima"])
+            print("\n--- 2. Modelo — salteado: el color no vio nada (modo cascada) ---")
+        umbral_modelo = float(config_motor(cfg["modelo"])["confianza_minima"])
 
     # ---------------------------------------------------------- [3] fusión
     veredicto = fusion.evaluar(
@@ -138,16 +151,17 @@ def main() -> int:
         hay_cambio_color=res_color.hay_cambio,
         papel=res_color.papel,
         conf_modelo=conf,
-        umbral_papel=color.papel_minimo,
+        umbral_papel=color.umbral_papel,
         umbral_modelo=umbral_modelo,
+        nombre=nombre,
     )
 
     print(f"\n--- 3. Veredicto (modo {cfg['fusion']['modo']}) ---")
-    print(f"  color  dice: {'DIARIO' if veredicto.color_ok else 'no'}")
-    print(f"  modelo dice: {'DIARIO' if veredicto.modelo_ok else 'no'}")
+    print(f"  color  dice: {'hay algo nuevo' if veredicto.color_ok else 'no'}")
+    print(f"  modelo dice: {nombre.upper() if veredicto.modelo_ok else 'no'}")
     print(f"  score final: {veredicto.score:.3f}")
     print(f"  razón:       {veredicto.explicacion}")
-    print(f"\n{'✅ DIARIO ENTREGADO' if veredicto.es_diario else '❌ No hay diario'}\n")
+    print(f"\n{'✅ ALARMA: ' + nombre if veredicto.es_diario else '❌ No hay ' + nombre}\n")
 
     # ------------------------------------------------- comparación con el viejo
     if args.comparar:
@@ -161,7 +175,7 @@ def main() -> int:
         print("--- Comparación con detect_diario.py (gris, sin modelo) ---")
         print(f"  original: {'detecta algo' if detectado else 'no detecta nada'}"
               f"  ({len(dets)} región/es)")
-        print(f"  híbrido:  {'DIARIO' if veredicto.es_diario else 'no'}"
+        print(f"  híbrido:  {nombre.upper() if veredicto.es_diario else 'no'}"
               f"  ({len(res_color.regiones)} región/es de color, "
               f"conf modelo {conf:.2f})\n")
 

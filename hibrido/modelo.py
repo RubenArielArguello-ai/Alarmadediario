@@ -34,7 +34,23 @@ def elegir_device(preferencia: str = "auto") -> str:
     return "cpu"
 
 
+def _nucleos_fisicos() -> int:
+    """Núcleos físicos (no los lógicos del hyperthreading, que en PyTorch
+    no suman y hasta restan)."""
+    try:
+        import psutil
+
+        n = psutil.cpu_count(logical=False)
+        if n:
+            return n
+    except Exception:
+        pass
+    return max(1, (os.cpu_count() or 2) // 2)
+
+
 class DetectorOWL:
+    motor = "OWLv2"
+
     def __init__(self, config_modelo: dict):
         self.id = config_modelo["id"]
         self.carpeta = RAIZ / config_modelo.get("carpeta_local", "modelos")
@@ -50,6 +66,9 @@ class DetectorOWL:
         # (0.62 -> 0.00 sobre las fotos de prueba) sin casi ganar velocidad.
         # Queda desactivada; no la actives salvo que la midas vos mismo.
         self.cuantizar = bool(config_modelo.get("cuantizar_cpu", False))
+        # Hilos de CPU. 0 = uno por núcleo FÍSICO: en una Mac Intel de 2
+        # núcleos y 4 hilos lógicos, 2 hilos tardaron 1.10 s y 4 tardaron 1.30.
+        self.hilos = int(config_modelo.get("hilos", 0))
         # Resolucion de entrada. OWLv2 fue entrenado a 960, pero se puede bajar
         # interpolando los position embeddings. El tiempo escala ~cuadratico.
         self.resolucion = int(config_modelo.get("resolucion", 640))
@@ -91,11 +110,8 @@ class DetectorOWL:
                 self.device = "cpu"
 
         if self.device == "cpu":
-            # Usar todos los nucleos fisicos acelera bastante en Mac Intel.
             try:
-                import os as _os
-
-                nucleos = _os.cpu_count() or 4
+                nucleos = self.hilos or _nucleos_fisicos()
                 torch.set_num_threads(max(1, nucleos))
                 print(f"[modelo] usando {max(1, nucleos)} hilos de CPU")
             except Exception:
@@ -193,3 +209,44 @@ class DetectorOWL:
 
         cajas.sort(key=lambda c: c["conf"], reverse=True)
         return mejor, cajas
+
+
+# ---------------------------------------------------------------- motores
+MOTORES = ("owlv2", "yolo_world", "claude", "openrouter")
+
+
+def config_motor(config_modelo: dict) -> dict:
+    """La configuración que ve el motor activo.
+
+    config.json guarda lo común (prompts, nombre, device...) en "modelo" y lo
+    propio de cada motor en una sección aparte ("owlv2", "yolo_world"), porque
+    sus umbrales no se pueden comparar: un 0.12 es un buen puntaje para
+    YOLO-World y ruido para OWLv2. Acá se juntan las dos partes.
+    Un config viejo, sin "motor", es plano y es de OWLv2.
+    """
+    motor = config_modelo.get("motor")
+    if not motor:
+        return dict(config_modelo)
+    comun = {k: v for k, v in config_modelo.items() if not isinstance(v, dict)}
+    return {**comun, **config_modelo.get(motor, {})}
+
+
+def crear_motor(config_modelo: dict):
+    """Crea el detector del motor que dice config["modelo"]["motor"]."""
+    motor = config_modelo.get("motor", "owlv2")
+    cfg = config_motor(config_modelo)
+    if motor == "yolo_world":
+        from modelo_yolo import DetectorYoloWorld
+
+        return DetectorYoloWorld(cfg)
+    if motor == "claude":
+        from modelo_claude import DetectorClaude
+
+        return DetectorClaude(cfg)
+    if motor == "openrouter":
+        from modelo_openrouter import DetectorOpenRouter
+
+        return DetectorOpenRouter(cfg)
+    if motor == "owlv2":
+        return DetectorOWL(cfg)
+    raise ValueError(f"motor desconocido: {motor!r} (opciones: {', '.join(MOTORES)})")

@@ -1,29 +1,32 @@
 """
 Detector híbrido: une los dos proyectos en un solo pipeline.
 
-    frame de cámara
+    frame de cámara (fija)
+         |
+    [0] ¿toca chequear?  cada `intervalo_chequeo` s (0 = todos los frames)
          |
          v
     [1] movimiento (gris, ~1 ms)      ¿alguien está pasando? -> esperar
          |
          v
-    [2] validador de color (LAB, ~5 ms)   ¿apareció algo sobre la alfombra?
-         |                                 ¿ese algo parece papel?
+    [2] validador de color (LAB, ~5 ms)   ¿cambió algo en la zona respecto
+         |                                 de cuando estaba vacía?
          |  (si no ve nada, acá se corta y el modelo nunca se despierta)
          v
-    [3] OWLv2 (~1-30 s según resolución)  ¿eso es un diario?
+    [3] modelo: YOLO-World (~0.6 s) u OWLv2 (~4-9 s)   ¿eso es lo que dice el prompt?
          |   <- recibe SOLO el recorte que marcó el color, no el frame entero
          v
     [4] fusión -> veredicto -> confirmaciones -> ALARMA
 
-La idea de fondo es la misma que en el proyecto original: el diario NO se
-mueve. Mientras hay movimiento no decidimos nada, porque es una persona
-pasando. Recién cuando la escena se queda quieta y además cambió respecto de
-la alfombra vacía, tiene sentido preguntar.
+La idea de fondo es la misma que en el proyecto original: el objeto, una vez
+apoyado, NO se mueve. Mientras hay movimiento no decidimos nada, porque es
+una mano o una persona pasando. Recién cuando la escena se queda quieta y
+además cambió respecto de la zona vacía, tiene sentido preguntar.
 """
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -32,12 +35,12 @@ import cv2
 import numpy as np
 
 from fusion import Fusion, Modo, Veredicto
-from modelo import DetectorOWL
+from modelo import config_motor, crear_motor
 from validador_color import ValidadorColor, ResultadoColor
 
 
 class Estado(str, Enum):
-    CALIBRANDO = "calibrando"        # aprendiendo cómo es la alfombra vacía
+    CALIBRANDO = "calibrando"        # aprendiendo cómo es la zona vacía
     VIGILANDO = "vigilando"          # todo normal
     MOVIMIENTO = "movimiento"        # algo se mueve, esperamos
     ESTABILIZANDO = "estabilizando"  # apareció algo, esperando que se quede quieto
@@ -68,6 +71,7 @@ class Resultado:
     # --- común ---
     cajas: list = field(default_factory=list)
     confirmaciones: int = 0
+    proximo_chequeo: float = -1.0   # segundos; -1 = chequeando ahora o continuo
 
     # El proyecto original llamaba a esto "diferencia respecto del fondo".
     # Se mantiene el nombre para que la UI y el harness viejos no se rompan.
@@ -81,16 +85,38 @@ class DetectorHibrido:
         self.cfg = config
         cfg_d = config["deteccion"]
 
-        self.owl = DetectorOWL(config["modelo"])
+        # OWLv2 o YOLO-World, según config["modelo"]["motor"]
+        self.motor = crear_motor(config["modelo"])
         self.color = ValidadorColor(config.get("color", {}))
         self.fusion = Fusion(config.get("fusion", {}))
 
         self.umbral_mov = float(cfg_d["umbral_movimiento"])
         self.seg_estabilidad = float(cfg_d["segundos_estabilidad"])
-        self.confirmaciones_necesarias = int(cfg_d["confirmaciones_necesarias"])
+        # Cada motor puede pedir su propia cantidad: con Claude alcanza con una
+        # consulta (y cada una cuesta); los modelos locales necesitan dos.
+        self.confirmaciones_necesarias = int(
+            config_motor(config["modelo"]).get(
+                "confirmaciones_necesarias", cfg_d["confirmaciones_necesarias"])
+        )
         self.seg_entre_inferencias = float(cfg_d["segundos_entre_inferencias"])
         self.cooldown = float(cfg_d["cooldown_alarma"])
         self.margen_recorte = int(cfg_d.get("margen_recorte", 40))
+        # Si lo que cambió es chico (ej.: solo la tapa de una birome
+        # transparente), el recorte se agranda alrededor hasta este lado, para
+        # que el modelo vea el objeto entero. Medido: birome detectada 75% -> 100%.
+        self.recorte_lado_minimo = int(cfg_d.get("recorte_lado_minimo", 288))
+        # Una detección del modelo solo cuenta si su caja contiene al menos esta
+        # fracción de todo lo que cambió (ver _caja_valida).
+        self.solape_minimo = float(cfg_d.get("solape_minimo", 0.15))
+        # Si cambia más que esta fracción de la zona, no es un objeto: se movió
+        # la hoja o la cámara, o cambió la luz. Se recalibra. 1 = nunca.
+        self.cobertura_maxima = float(config.get("color", {}).get("cobertura_maxima", 0.6))
+        # Cada cuántos segundos se mira la zona. 0 = sin pausa, todos los
+        # frames (el comportamiento original).
+        self.intervalo_chequeo = float(cfg_d.get("intervalo_chequeo", 0))
+        # Tope de un chequeo: si en este tiempo no se pudo concluir (alguien
+        # con la mano encima de la hoja), se abandona hasta el próximo.
+        self.max_seg_chequeo = float(cfg_d.get("max_segundos_chequeo", 30))
 
         # --- estado interno ---
         self.mascara_roi: np.ndarray | None = None
@@ -99,7 +125,7 @@ class DetectorHibrido:
         self.quieto_desde: float | None = None
         self.confirmaciones = 0
         self.ultima_inferencia = 0.0
-        self.ultima_alarma = 0.0
+        self.ultima_alarma = float("-inf")   # nunca hubo alarma
         self.estado = Estado.CALIBRANDO
 
         # --- inferencia asíncrona ---
@@ -118,22 +144,44 @@ class DetectorHibrido:
         self._ultimo_color = ResultadoColor()
         self._ultimo_veredicto: Veredicto | None = None
 
+        # --- chequeo periódico ---
+        # Un "chequeo" es un ciclo corto: comparar la zona contra la
+        # referencia y, si cambió, esperar a que quede quieta y consultar al
+        # modelo hasta tener veredicto. Entre chequeo y chequeo no se analiza.
+        self._ciclo_desde: float | None = None   # None = no hay chequeo abierto
+        self._inferencias_ciclo = 0
+        self._proximo_chequeo = 0.0              # 0 = chequear ya
+        self._resultado_chequeo = ""
+        # Cómo se veía la zona cuando se llegó al último veredicto. Entre
+        # chequeos no se mira, así que es la única forma de saber si alguien
+        # cambió el objeto mientras tanto.
+        self._gris_conclusion: np.ndarray | None = None
+
+        # --- concurrencia ---
+        # procesar() corre en un hilo del pool (server.py hace
+        # asyncio.to_thread), mientras que resolver_inferencia() se llama
+        # directamente desde el loop de eventos cuando termina la inferencia
+        # en OTRO hilo. Ambos leen y escriben self.estado, self.confirmaciones,
+        # etc. al mismo tiempo. RLock (no Lock simple) porque set_roi() llama
+        # a reiniciar_fondo() y las dos toman el lock.
+        self._lock = threading.RLock()
+
     # ------------------------------------------------------------------ atajos
     @property
     def conf_min(self) -> float:
-        return self.owl.umbral
+        return self.motor.umbral
 
     @conf_min.setter
     def conf_min(self, v: float) -> None:
-        self.owl.umbral = float(v)
+        self.motor.umbral = float(v)
 
     @property
     def device(self) -> str:
-        return self.owl.device
+        return self.motor.device
 
     @property
     def nombre(self) -> str:
-        return self.owl.nombre
+        return self.motor.nombre
 
     @property
     def usa_modelo(self) -> bool:
@@ -145,44 +193,110 @@ class DetectorHibrido:
 
     def cargar_modelo(self) -> None:
         if self.usa_modelo:
-            self.owl.cargar()
+            self.motor.cargar()
         else:
-            print("[modelo] modo solo_color: no cargo OWLv2")
+            print("[modelo] modo solo_color: no cargo ningún modelo")
 
     # -------------------------------------------------------------------- ROI
     def set_roi(self, puntos_rel: list, alto: int, ancho: int) -> None:
         """Define la zona a vigilar. puntos_rel en coordenadas 0-1."""
-        if not puntos_rel or len(puntos_rel) < 3:
-            self.mascara_roi = None
-            self.bbox_roi = None
-            self.color.set_roi(None)
+        with self._lock:
+            if not puntos_rel or len(puntos_rel) < 3:
+                self.mascara_roi = None
+                self.bbox_roi = None
+                self.color.set_roi(None)
+                self.reiniciar_fondo()
+                return
+
+            pts = np.array(
+                [[int(x * ancho), int(y * alto)] for x, y in puntos_rel],
+                dtype=np.int32,
+            )
+            mascara = np.zeros((alto, ancho), dtype=np.uint8)
+            cv2.fillPoly(mascara, [pts], 255)
+            self.mascara_roi = mascara
+
+            margen = 25
+            x1 = max(0, int(pts[:, 0].min()) - margen)
+            y1 = max(0, int(pts[:, 1].min()) - margen)
+            x2 = min(ancho, int(pts[:, 0].max()) + margen)
+            y2 = min(alto, int(pts[:, 1].max()) + margen)
+            self.bbox_roi = (x1, y1, x2, y2)
+            self.color.set_roi(mascara)
             self.reiniciar_fondo()
-            return
-
-        pts = np.array(
-            [[int(x * ancho), int(y * alto)] for x, y in puntos_rel], dtype=np.int32
-        )
-        mascara = np.zeros((alto, ancho), dtype=np.uint8)
-        cv2.fillPoly(mascara, [pts], 255)
-        self.mascara_roi = mascara
-
-        margen = 25
-        x1 = max(0, int(pts[:, 0].min()) - margen)
-        y1 = max(0, int(pts[:, 1].min()) - margen)
-        x2 = min(ancho, int(pts[:, 0].max()) + margen)
-        y2 = min(alto, int(pts[:, 1].max()) + margen)
-        self.bbox_roi = (x1, y1, x2, y2)
-        self.color.set_roi(mascara)
-        self.reiniciar_fondo()
 
     def reiniciar_fondo(self) -> None:
         """Olvida la referencia y vuelve a calibrar (usar al mover la cámara)."""
-        self.color.reiniciar()
-        self.frame_anterior = None
-        self.quieto_desde = None
+        with self._lock:
+            self.color.reiniciar()
+            self.frame_anterior = None
+            self.quieto_desde = None
+            self.confirmaciones = 0
+            self._ultimo_color = ResultadoColor()
+            self.estado = Estado.CALIBRANDO
+            # Recién calibrado se chequea enseguida, sin esperar el intervalo.
+            self._ciclo_desde = None
+            self._proximo_chequeo = 0.0
+            self._resultado_chequeo = ""
+            self._gris_conclusion = None
+
+    # ------------------------------------------------------ chequeo periódico
+    @property
+    def periodico(self) -> bool:
+        return self.intervalo_chequeo > 0
+
+    def _abrir_ciclo(self, ahora: float, gris: np.ndarray) -> None:
+        self._conf_max_ciclo = 0.0
+        self._ciclo_desde = ahora
+        self._inferencias_ciclo = 0
         self.confirmaciones = 0
-        self._ultimo_color = ResultadoColor()
-        self.estado = Estado.CALIBRANDO
+        self.quieto_desde = None
+
+        # Si desde el último veredicto la zona cambió (sacaron el lápiz y
+        # pusieron otra cosa mientras no mirábamos), ese veredicto ya no vale:
+        # hay que volver a preguntar. Si no cambió, se reutiliza tal cual.
+        if self.estado in (Estado.DIARIO, Estado.DESCARTADO) and (
+            self._gris_conclusion is None
+            or self._fraccion_distinta(self._gris_conclusion, gris) > self.umbral_mov
+        ):
+            self.estado = Estado.VIGILANDO
+            self._ultimo_veredicto = None
+
+    def _cerrar_ciclo(self, ahora: float, resultado: str) -> None:
+        """Termina el chequeo en curso y agenda el próximo."""
+        if not self.periodico or self._ciclo_desde is None:
+            return
+        self._ciclo_desde = None
+        self._proximo_chequeo = ahora + self.intervalo_chequeo
+        self._resultado_chequeo = resultado
+        if self.frame_anterior is not None:
+            self._gris_conclusion = self.frame_anterior.copy()
+
+    def chequear_ya(self, olvidar_veredicto: bool = False) -> None:
+        """Adelanta el próximo chequeo a ahora mismo.
+
+        Con olvidar_veredicto (se cambió el prompt), además descarta lo que
+        se había concluido: un "lápiz presente" no dice nada si ahora se busca
+        otra cosa, y sin esto el chequeo siguiente lo daría por bueno sin
+        volver a consultar al modelo.
+        """
+        with self._lock:
+            self.confirmaciones = 0
+            self._ciclo_desde = None
+            self._proximo_chequeo = 0.0
+            if olvidar_veredicto:
+                self.ultima_alarma = float("-inf")
+                self._ultimo_veredicto = None
+                self._resultado_chequeo = ""
+                if self.estado in (Estado.DIARIO, Estado.DESCARTADO):
+                    self.estado = Estado.VIGILANDO
+
+    def segundos_para_chequeo(self, ahora: float) -> float:
+        """Cuánto falta para el próximo chequeo. -1 si hay uno en curso o si
+        no hay chequeo periódico."""
+        if not self.periodico or self._ciclo_desde is not None:
+            return -1.0
+        return max(0.0, self._proximo_chequeo - ahora)
 
     # ------------------------------------------------------------ pre-proceso
     def _gris(self, frame: np.ndarray) -> np.ndarray:
@@ -212,13 +326,26 @@ class DetectorHibrido:
         """Lo llama el server desde otro hilo. Bloquea, pero no al video."""
         alto, ancho = frame.shape[:2]
 
+        # Tomamos una foto instantánea del color/ROI bajo lock (rápido), y
+        # dejamos la inferencia del modelo (lenta, puede tardar varios
+        # segundos) FUERA del lock: si no, congelaría también a procesar().
+        with self._lock:
+            ultimo_color = self._ultimo_color
+            bbox_roi = self.bbox_roi
+            mascara_roi = self.mascara_roi
+
         # Preferimos el recorte que marcó el validador de color: el objeto pasa
-        # a ocupar casi todo el cuadro y OWLv2 sube bastante la confianza.
-        caja = self.color.bbox_regiones(
-            self._ultimo_color, self.margen_recorte, alto, ancho
-        )
+        # a ocupar casi todo el cuadro y el modelo sube bastante la confianza.
+        caja = self.color.bbox_regiones(ultimo_color, self.margen_recorte, alto, ancho)
+        if caja is not None and self.recorte_lado_minimo:
+            x1, y1, x2, y2 = caja
+            cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+            lw = max(x2 - x1, self.recorte_lado_minimo) / 2
+            lh = max(y2 - y1, self.recorte_lado_minimo) / 2
+            caja = (int(max(0, cx - lw)), int(max(0, cy - lh)),
+                    int(min(ancho, cx + lw)), int(min(alto, cy + lh)))
         if caja is None:
-            caja = self.bbox_roi
+            caja = bbox_roi
 
         recorte, offset = frame, (0, 0)
         if caja is not None:
@@ -228,11 +355,39 @@ class DetectorHibrido:
         if recorte.size == 0:
             return 0.0, []
 
-        conf, cajas = self.owl.detectar(recorte)
+        _, cajas = self.motor.detectar(recorte)
         for c in cajas:
             c["x1"] += offset[0]; c["x2"] += offset[0]
             c["y1"] += offset[1]; c["y2"] += offset[1]
-        return conf, cajas
+
+        # El recorte tiene margen, así que puede incluir cosas que ya estaban:
+        # en una prueba real, la alarma la disparó un control remoto fuera de la
+        # hoja. Solo cuenta lo que está sobre lo que cambió.
+        validas = [c for c in cajas if self._caja_valida(c, ultimo_color, mascara_roi)]
+        conf = max((c["conf"] for c in validas), default=0.0)
+        return conf, validas
+
+    def _caja_valida(self, c: dict, color: ResultadoColor,
+                     mascara_roi: np.ndarray | None) -> bool:
+        """¿Esta detección del modelo es sobre el objeto que apareció?
+
+        Su centro tiene que caer dentro de la zona vigilada, y la caja tiene
+        que contener lo nuevo: al menos un 15% de todo lo que cambió. Se mide
+        así, y no como "cuánto de la caja cambió", porque de una birome
+        transparente el color solo ve la tapa: la caja del modelo abarca la
+        birome entera y apenas un 9% de ella cambia, aunque contiene el 100% de
+        lo nuevo. Un objeto que ya estaba (un control remoto al borde del
+        recorte) contiene 0%.
+        """
+        cx, cy = int((c["x1"] + c["x2"]) / 2), int((c["y1"] + c["y2"]) / 2)
+        if mascara_roi is not None:
+            h, w = mascara_roi.shape[:2]
+            if not (0 <= cx < w and 0 <= cy < h) or mascara_roi[cy, cx] == 0:
+                return False
+        if color.mascara is None:
+            # Sin información de color (modo solo_modelo): no hay con qué filtrar.
+            return True
+        return color.cubre(c["x1"], c["y1"], c["x2"], c["y2"]) >= self.solape_minimo
 
     def _listo_para_inferir(self, ahora: float) -> bool:
         return (
@@ -241,58 +396,96 @@ class DetectorHibrido:
             and ahora - self.ultima_inferencia >= self.seg_entre_inferencias
         )
 
+    def _puede_entrar_diario(self, ahora: float) -> bool:
+        """
+        Gatilla el cooldown_alarma. Si ya estábamos en DIARIO, siempre se
+        puede (solo refresca el latido, no es una alarma nueva). Si es una
+        entrada fresca —primera vez, o el diario se sacó y volvió a
+        aparecer— solo se permite si ya pasó el tiempo mínimo configurado
+        desde la última alarma. Usado tanto por el camino síncrono
+        (solo_color) como por resolver_inferencia() (con modelo).
+        """
+        if self.estado == Estado.DIARIO:
+            return True
+        return ahora - self.ultima_alarma >= self.cooldown
+
     def _fusionar(self, conf: float) -> Veredicto:
         return self.fusion.evaluar(
             score_color=self._ultimo_color.score,
             hay_cambio_color=self._ultimo_color.hay_cambio,
             papel=self._ultimo_color.papel,
             conf_modelo=conf,
-            umbral_papel=self.color.papel_minimo,
-            umbral_modelo=self.owl.umbral,
+            umbral_papel=self.color.umbral_papel,
+            umbral_modelo=self.motor.umbral,
+            nombre=self.nombre,
         )
 
     def resolver_inferencia(self, conf: float, cajas: list) -> None:
         """Aplica el resultado que devolvió el hilo de inferencia."""
-        self._cajas_modelo = cajas
-        self._conf_ultima = conf
-        self._cajas_hasta = time.time() + self.segundos_persistencia
+        with self._lock:
+            self._cajas_modelo = cajas
+            self._conf_ultima = conf
+            self._cajas_hasta = time.time() + self.segundos_persistencia
 
-        veredicto = self._fusionar(conf)
-        self._ultimo_veredicto = veredicto
+            # Un resultado que llega cuando su chequeo ya se cerró (se
+            # recalibró, o se venció el tiempo) solo se muestra: no decide.
+            if (self.periodico and not self.modo_continuo
+                    and self._ciclo_desde is None):
+                return
 
-        if self.modo_continuo:
-            self.estado = Estado.DIARIO if veredicto.es_diario else Estado.VIGILANDO
-            return
+            veredicto = self._fusionar(conf)
+            self._ultimo_veredicto = veredicto
 
-        if veredicto.es_diario:
-            self.confirmaciones += 1
-        else:
-            self.confirmaciones = max(0, self.confirmaciones - 1)
+            if self.modo_continuo:
+                self.estado = (
+                    Estado.DIARIO if veredicto.es_diario else Estado.VIGILANDO
+                )
+                return
 
-        ahora = time.time()
-        if self.confirmaciones >= self.confirmaciones_necesarias:
-            if ahora - self.ultima_alarma >= self.cooldown:
-                self.ultima_alarma = ahora
-            self.estado = Estado.DIARIO
-        elif self._ultimo_color.hay_cambio and not veredicto.modelo_ok:
-            # Hay un objeto sobre la alfombra, pero no es un diario.
-            self.estado = Estado.DESCARTADO
+            self._inferencias_ciclo += 1
+            self._conf_max_ciclo = max(getattr(self, "_conf_max_ciclo", 0.0), conf)
+            if veredicto.es_diario:
+                self.confirmaciones += 1
+            else:
+                self.confirmaciones = max(0, self.confirmaciones - 1)
+
+            ahora = time.time()
+            if self.confirmaciones >= self.confirmaciones_necesarias:
+                if self._puede_entrar_diario(ahora):
+                    self.ultima_alarma = ahora
+                    self.estado = Estado.DIARIO
+                # si no: seguimos en cooldown, no generamos un nuevo flanco
+                # de alarma en el server. self.estado queda como estaba.
+                self._cerrar_ciclo(ahora, f"{self.nombre.capitalize()} detectado.")
+            elif self._ultimo_color.hay_cambio and not veredicto.modelo_ok:
+                # Hay un objeto en la zona, pero no es el que buscamos.
+                self.estado = Estado.DESCARTADO
+                # Con una duda razonable (alguna consulta llegó a la mitad del
+                # umbral) no se absorbe al fondo: se vuelve a verificar.
+                self._duda_descartado = self._conf_max_ciclo >= 0.5 * self.motor.umbral
+                if self._inferencias_ciclo >= self.confirmaciones_necesarias:
+                    self._cerrar_ciclo(
+                        ahora, f"Hay algo en la zona, pero no es {self.nombre}."
+                    )
 
     # ---------------------------------------------------------------- público
     def procesar(self, frame: np.ndarray) -> Resultado:
-        if self.modo_continuo:
-            res = self._procesar_continuo(frame)
-        else:
-            res = self._procesar_normal(frame)
+        # Corre en un hilo del pool (server.py: asyncio.to_thread). Todo lo
+        # que toca estado compartido con resolver_inferencia() va bajo lock.
+        with self._lock:
+            if self.modo_continuo:
+                res = self._procesar_continuo(frame)
+            else:
+                res = self._procesar_normal(frame)
 
-        # Las cajas del modelo se mantienen unos segundos para que no
-        # parpadeen: entre inferencia e inferencia pasan varios frames.
-        cajas_modelo = (
-            self._cajas_modelo if time.time() < self._cajas_hasta else []
-        )
-        res.cajas = list(res.cajas) + list(cajas_modelo)
-        if res.confianza == 0.0 and cajas_modelo:
-            res.confianza = self._conf_ultima
+            # Las cajas del modelo se mantienen unos segundos para que no
+            # parpadeen: entre inferencia e inferencia pasan varios frames.
+            cajas_modelo = (
+                self._cajas_modelo if time.time() < self._cajas_hasta else []
+            )
+            res.cajas = list(res.cajas) + list(cajas_modelo)
+            if res.confianza == 0.0 and cajas_modelo:
+                res.confianza = self._conf_ultima
         return res
 
     # ------------------------------------------------------------ modo prueba
@@ -322,7 +515,7 @@ class DetectorHibrido:
         ahora = time.time()
         gris = self._gris(frame)
 
-        # --- [0] calibración: aprendemos cómo es la alfombra vacía ---
+        # --- [0] calibración: aprendemos cómo es la zona vacía ---
         if not self.color.calibrado:
             self.frame_anterior = gris.copy()
             listo = self.color.alimentar_calibracion(frame)
@@ -333,8 +526,34 @@ class DetectorHibrido:
             self.estado = Estado.CALIBRANDO
             return self._armar(
                 Estado.CALIBRANDO,
-                f"Calibrando alfombra vacía… {hechos}/{total}", 0.0,
+                f"Calibrando zona vacía… {hechos}/{total}", 0.0,
             )
+
+        # --- [0b] chequeo periódico ---
+        if self.periodico:
+            if self._ciclo_desde is None:
+                # Entre chequeos no se analiza nada; solo se guarda el frame
+                # para que el próximo chequeo pueda medir movimiento.
+                self.frame_anterior = gris.copy()
+                if ahora < self._proximo_chequeo:
+                    falta = self._proximo_chequeo - ahora
+                    return self._armar(
+                        self.estado,
+                        f"{self._resultado_chequeo} Próximo chequeo en {falta:.0f}s."
+                        .strip(),
+                        0.0,
+                    )
+                self._abrir_ciclo(ahora, gris)
+            elif (ahora - self._ciclo_desde > self.max_seg_chequeo
+                    and not self.inferencia_activa):
+                # No se pudo concluir (había movimiento todo el tiempo).
+                # Se conserva el último veredicto y se reintenta más tarde.
+                if self.estado not in (Estado.DIARIO, Estado.DESCARTADO):
+                    self.estado = Estado.VIGILANDO
+                self._cerrar_ciclo(
+                    ahora, "Chequeo sin conclusión: había movimiento en la zona."
+                )
+                return self._armar(self.estado, self._resultado_chequeo, 0.0)
 
         # --- [1] movimiento ---
         movimiento = 0.0
@@ -353,26 +572,87 @@ class DetectorHibrido:
         # --- [2] validador de color ---
         self._ultimo_color = self.color.analizar(frame)
 
+        # --- [2a] cambió casi toda la zona: no es un objeto, es la escena ---
+        # Se movió la hoja o la cámara, o el iPhone ajustó la exposición. En una
+        # prueba real esto terminó en alarma: el modelo buscó en la hoja entera
+        # y encontró "algo". Se espera a que se quede quieta y se recalibra.
+        if self._ultimo_color.cobertura >= self.cobertura_maxima:
+            if self.quieto_desde is None:
+                self.quieto_desde = ahora
+            estable = ahora - self.quieto_desde
+            if estable < self.seg_estabilidad:
+                self.estado = Estado.ESTABILIZANDO
+                return self._armar(
+                    Estado.ESTABILIZANDO,
+                    f"Cambió el {self._ultimo_color.cobertura:.0%} de la zona: "
+                    f"no parece un objeto. Esperando {estable:.1f}/"
+                    f"{self.seg_estabilidad:.0f}s para recalibrar.",
+                    movimiento,
+                )
+            print(f"[escena] cambió el {self._ultimo_color.cobertura:.0%} de la "
+                  "zona (hoja, cámara o luz): recalibro")
+            self.reiniciar_fondo()
+            return self._armar(
+                Estado.CALIBRANDO,
+                "Cambió toda la zona (se movió la hoja o la cámara, o cambió la "
+                "luz): recalibrando.",
+                movimiento,
+            )
+
         if not self._ultimo_color.hay_cambio:
             self.quieto_desde = None
             self.confirmaciones = 0
             self._ultimo_veredicto = None
             self.estado = Estado.VIGILANDO
+            self._cerrar_ciclo(ahora, "Sin cambios en la zona.")
             return self._armar(
-                Estado.VIGILANDO, "Sin novedad sobre la alfombra.", movimiento
+                Estado.VIGILANDO, "Sin cambios en la zona.", movimiento
             )
 
         # En modo solo_color no hay etapa 3: el color decide y listo.
         if not self.usa_modelo:
             veredicto = self._fusionar(0.0)
             self._ultimo_veredicto = veredicto
-            self.estado = Estado.DIARIO if veredicto.es_diario else Estado.DESCARTADO
+            if veredicto.es_diario:
+                ahora = time.time()
+                if self._puede_entrar_diario(ahora):
+                    self.ultima_alarma = ahora
+                    self.estado = Estado.DIARIO
+                # si no: en cooldown, mantenemos el estado anterior (no
+                # generamos un nuevo flanco de alarma).
+            else:
+                self.estado = Estado.DESCARTADO
+            explic = veredicto.explicacion
+            self._cerrar_ciclo(ahora, explic[:1].upper() + explic[1:] + ".")
             return self._armar(self.estado, veredicto.explicacion, movimiento)
 
         # --- ya confirmado: no volvemos a molestar al modelo ---
         if self.estado == Estado.DIARIO:
+            msg = f"{self.nombre.capitalize()} presente."
+            self._cerrar_ciclo(ahora, msg)
+            return self._armar(Estado.DIARIO, msg, movimiento)
+
+        # --- mismo objeto descartado que en el chequeo anterior ---
+        # (_abrir_ciclo ya lo habría olvidado si la zona hubiera cambiado).
+        # Solo al arrancar el chequeo: dentro de uno, DESCARTADO aparece tras
+        # la primera inferencia negativa y todavía falta confirmarlo.
+        if (self.periodico and self.estado == Estado.DESCARTADO
+                and self._inferencias_ciclo == 0
+                and not getattr(self, "_duda_descartado", False)):
+            # Dos chequeos seguidos con algo que no es lo buscado y que no se
+            # movió: pasa a ser parte del fondo. Así se absorbe una cámara o
+            # una hoja que se corrió un poco, o algo que alguien dejó ahí. Sin
+            # esto, esos cambios quedan para siempre en la zona, agrandan el
+            # recorte y el modelo deja de ver el objeto cuando sí aparece.
+            # Lo que SÍ es el objeto buscado (DIARIO) nunca se absorbe.
+            print(f"[escena] lo que hay en la zona no es {self.nombre} y no se "
+                  "movió: lo incorporo al fondo")
+            self.reiniciar_fondo()
             return self._armar(
-                Estado.DIARIO, f"{self.nombre.capitalize()} presente.", movimiento
+                Estado.CALIBRANDO,
+                f"Lo que hay en la zona no es {self.nombre} y no se movió: "
+                "lo incorporo al fondo y recalibro.",
+                movimiento,
             )
 
         # --- [2b] esperamos a que la escena se quede quieta ---
@@ -384,8 +664,7 @@ class DetectorHibrido:
             self.estado = Estado.ESTABILIZANDO
             return self._armar(
                 Estado.ESTABILIZANDO,
-                f"Objeto nuevo (ΔE={self._ultimo_color.delta_e:.0f}, "
-                f"papel={self._ultimo_color.papel:.2f}). "
+                f"Objeto nuevo (ΔE={self._ultimo_color.delta_e:.0f}). "
                 f"Estabilizando {estable:.1f}/{self.seg_estabilidad:.0f}s",
                 movimiento,
             )
@@ -429,4 +708,5 @@ class DetectorHibrido:
             modelo_ok=ver.modelo_ok if ver else False,
             cajas=col.cajas,
             confirmaciones=self.confirmaciones,
+            proximo_chequeo=round(self.segundos_para_chequeo(time.time()), 1),
         )

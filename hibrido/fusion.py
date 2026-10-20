@@ -56,7 +56,7 @@ class Fusion:
 
     def evaluar(self, score_color: float, hay_cambio_color: bool,
                 papel: float, conf_modelo: float, umbral_papel: float,
-                umbral_modelo: float) -> Veredicto:
+                umbral_modelo: float, nombre: str = "diario") -> Veredicto:
 
         color_ok = bool(hay_cambio_color and papel >= umbral_papel)
         modelo_ok = bool(conf_modelo >= umbral_modelo)
@@ -104,15 +104,15 @@ class Fusion:
         score = min(n_color, n_modelo) if (color_ok and modelo_ok) else \
             0.5 * (n_color + n_modelo)
         if not hay_cambio_color:
-            explic = "el color no ve nada nuevo sobre la alfombra"
+            explic = "el color no ve nada nuevo en la zona"
         elif not color_ok:
             explic = (f"hay algo nuevo pero no parece papel "
                       f"({papel:.2f} < {umbral_papel:.2f})")
         elif not modelo_ok:
-            explic = (f"hay algo tipo papel pero el modelo no lo reconoce "
-                      f"como diario ({conf_modelo:.2f} < {umbral_modelo:.2f})")
+            explic = (f"hay algo nuevo pero el modelo no lo reconoce "
+                      f"como {nombre} ({conf_modelo:.2f} < {umbral_modelo:.2f})")
         else:
-            explic = (f"color y modelo coinciden "
-                      f"(papel {papel:.2f} · conf {conf_modelo:.2f})")
+            explic = (f"color y modelo coinciden: es {nombre} "
+                      f"(conf {conf_modelo:.2f})")
 
         return Veredicto(color_ok and modelo_ok, score, explic, color_ok, modelo_ok)

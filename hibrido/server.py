@@ -4,7 +4,7 @@ Servidor local de la Alarma de Diario (versión híbrida).
 
 Arranca en http://localhost:8000 y:
   - captura de la cámara con OpenCV
-  - corre el pipeline híbrido color + OWLv2 (detector.py)
+  - corre el pipeline híbrido: color + modelo (YOLO-World u OWLv2), en detector.py
   - sirve la UI web y transmite video + estado por WebSocket
   - registra cada alarma en capturas/detecciones.csv y, si está activo,
     dispara el webhook de n8n que ya usaba el proyecto original
@@ -15,6 +15,8 @@ Uso:
     python server.py
     python server.py --camara 1 --puerto 8080
     python server.py --modo solo_color      # sin modelo, como el proyecto viejo
+    python server.py --motor claude         # verifica con Claude (necesita ANTHROPIC_API_KEY)
+    python server.py --motor openrouter     # verifica vía OpenRouter (necesita OPENROUTER_API_KEY)
 """
 
 from __future__ import annotations
@@ -232,6 +234,7 @@ class Aplicacion:
             "score_final": resultado.score_final,
             "veredicto": resultado.veredicto,
             "confirmaciones": resultado.confirmaciones,
+            "proximo_chequeo": resultado.proximo_chequeo,
             "alarma": alarma_nueva,
             "cajas": [
                 {
@@ -277,6 +280,11 @@ def crear_app(config: dict) -> tuple[FastAPI, Aplicacion]:
     def guardar_config() -> None:
         RUTA_CONFIG.write_text(json.dumps(config, indent=2, ensure_ascii=False))
 
+    def seccion_motor() -> dict:
+        """Dónde se guardan umbral y resolución: cada motor tiene los suyos."""
+        m = config["modelo"]
+        return m.setdefault(m["motor"], {}) if m.get("motor") else m
+
     @app.on_event("startup")
     async def arrancar():
         estado.detector.cargar_modelo()
@@ -320,16 +328,20 @@ def crear_app(config: dict) -> tuple[FastAPI, Aplicacion]:
         d = estado.detector
         if "confianza_minima" in datos:
             d.conf_min = float(datos["confianza_minima"])
-            config["modelo"]["confianza_minima"] = d.conf_min
+            seccion_motor()["confianza_minima"] = d.conf_min
         if "mostrar_debiles" in datos:
-            d.owl.mostrar_debiles = bool(datos["mostrar_debiles"])
-            config["modelo"]["mostrar_debiles"] = d.owl.mostrar_debiles
+            d.motor.mostrar_debiles = bool(datos["mostrar_debiles"])
+            config["modelo"]["mostrar_debiles"] = d.motor.mostrar_debiles
         if "umbral_movimiento" in datos:
             d.umbral_mov = float(datos["umbral_movimiento"])
             config["deteccion"]["umbral_movimiento"] = d.umbral_mov
         if "segundos_estabilidad" in datos:
             d.seg_estabilidad = float(datos["segundos_estabilidad"])
             config["deteccion"]["segundos_estabilidad"] = d.seg_estabilidad
+        if "intervalo_chequeo" in datos:
+            d.intervalo_chequeo = max(0.0, float(datos["intervalo_chequeo"]))
+            d.chequear_ya()
+            config["deteccion"]["intervalo_chequeo"] = d.intervalo_chequeo
         guardar_config()
         return {"ok": True}
 
@@ -342,6 +354,8 @@ def crear_app(config: dict) -> tuple[FastAPI, Aplicacion]:
             "area_minima": ("area_minima", int),
             "papel_minimo": ("papel_minimo", float),
             "ignorar_sombras": ("ignorar_sombras", bool),
+            "exigir_papel": ("exigir_papel", bool),
+            "sombra_luz_min": ("sombra_luz_min", float),
         }
         for clave, (attr, tipo) in mapa.items():
             if clave in datos:
@@ -376,27 +390,29 @@ def crear_app(config: dict) -> tuple[FastAPI, Aplicacion]:
     @app.post("/api/objetivo")
     async def objetivo(datos: dict):
         """Cambia QUÉ busca el modelo, en caliente y sin reiniciar."""
-        owl = estado.detector.owl
+        motor = estado.detector.motor
         prompts = [p.strip() for p in datos.get("prompts", []) if p.strip()]
         if prompts:
-            owl.set_prompts(prompts)
+            # Con YOLO-World tarda ~1 s (CLIP codifica los textos): en un
+            # hilo, para no congelar el video ni la página mientras tanto.
+            await asyncio.to_thread(motor.set_prompts, prompts)
             config["modelo"]["prompts"] = prompts
         if datos.get("nombre"):
-            owl.nombre = datos["nombre"].strip()
-            config["modelo"]["nombre_objeto"] = owl.nombre
-        estado.detector.confirmaciones = 0
-        estado.detector.ultima_alarma = 0.0
+            motor.nombre = datos["nombre"].strip()
+            config["modelo"]["nombre_objeto"] = motor.nombre
+        # El veredicto anterior era sobre OTRO objeto: no vale más.
+        estado.detector.chequear_ya(olvidar_veredicto=True)
         guardar_config()
-        print(f"[objetivo] ahora busco '{owl.nombre}': {', '.join(owl.prompts)}")
-        return {"ok": True, "nombre": owl.nombre, "prompts": owl.prompts}
+        print(f"[objetivo] ahora busco '{motor.nombre}': {', '.join(motor.prompts)}")
+        return {"ok": True, "nombre": motor.nombre, "prompts": motor.prompts}
 
     @app.post("/api/resolucion")
     async def resolucion(datos: dict):
-        owl = estado.detector.owl
-        owl.aplicar_resolucion(int(datos.get("resolucion", 640)))
-        config["modelo"]["resolucion"] = owl.resolucion
+        motor = estado.detector.motor
+        motor.aplicar_resolucion(int(datos.get("resolucion", 640)))
+        seccion_motor()["resolucion"] = motor.resolucion
         guardar_config()
-        return {"ok": True, "resolucion": owl.resolucion}
+        return {"ok": True, "resolucion": motor.resolucion}
 
     @app.post("/api/modo")
     async def modo(datos: dict):
@@ -430,6 +446,8 @@ def main() -> None:
     ap.add_argument("--puerto", type=int, default=8000)
     ap.add_argument("--device", help="mps | cuda | cpu")
     ap.add_argument("--modo", help="cascada | and | or | ponderado | solo_color | solo_modelo")
+    ap.add_argument("--motor", choices=("owlv2", "yolo_world", "claude", "openrouter"),
+                    help="qué modelo reconoce el objeto (default: el de config.json)")
     args = ap.parse_args()
 
     config = json.loads(RUTA_CONFIG.read_text())
@@ -439,6 +457,8 @@ def main() -> None:
         config["modelo"]["device"] = args.device
     if args.modo:
         config["fusion"]["modo"] = args.modo
+    if args.motor:
+        config["modelo"]["motor"] = args.motor
 
     app, _ = crear_app(config)
     print(f"\n  Abrí  ->  http://localhost:{args.puerto}\n")

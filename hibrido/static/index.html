@@ -137,7 +137,7 @@
       <p class="msg" id="msg"></p>
       <p class="leyenda">
         <i style="background:#22d3ee"></i>lo que vio la diferencia de color &nbsp;
-        <i style="background:#3fb950"></i>lo que el modelo reconoció como diario &nbsp;
+        <i style="background:#3fb950"></i>lo que el modelo reconoció como el objeto buscado &nbsp;
         <i style="background:#d29922"></i>detección débil del modelo
       </p>
     </div>
@@ -149,7 +149,7 @@
         <div class="val no" id="val-color">
           <span class="luz"></span>
           <span class="txt">
-            <span class="tit c1">1 · Color en la alfombra</span><br>
+            <span class="tit c1">1 · ¿Cambió algo en la zona?</span><br>
             <span class="sub" id="sub-color">esperando…</span>
           </span>
           <span class="voto" id="voto-color">—</span>
@@ -158,13 +158,32 @@
         <div class="val no" id="val-modelo">
           <span class="luz"></span>
           <span class="txt">
-            <span class="tit c2">2 · OWLv2 · ¿es un diario?</span><br>
+            <span class="tit c2">2 · <span id="tit-motor">modelo</span> · ¿es <span id="tit-objeto">el objeto</span>?</span><br>
             <span class="sub" id="sub-modelo">esperando…</span>
           </span>
           <span class="voto" id="voto-modelo">—</span>
         </div>
 
         <p class="veredicto" id="veredicto">—</p>
+      </div>
+
+      <div class="panel" style="border-color:#2d6b3f">
+        <h2>Qué busca el modelo</h2>
+        <label>Nombre para la alarma</label>
+        <input type="text" id="obj-nombre" value="diario">
+        <label id="lbl-prompts">Descripciones en inglés (una por línea)</label>
+        <textarea id="obj-prompts" rows="3">a rolled newspaper
+a newspaper
+a folded newspaper</textarea>
+        <button class="primario" onclick="guardarObjetivo()">Cambiar objetivo</button>
+        <button onclick="preset('birome')">Preset birome</button>
+        <button onclick="preset('lapiz')">Preset lápiz</button>
+        <button onclick="preset('diario')">Preset diario</button>
+        <button onclick="preset('anteojos')">Preset anteojos</button>
+        <p class="msg" id="msg-obj">
+          En inglés: el modelo entiende mucho peor el español. Al cambiarlo se
+          hace un chequeo enseguida.
+        </p>
       </div>
 
       <div class="panel">
@@ -193,15 +212,28 @@
         <div class="fila"><span>Score final</span><span id="v-score">—</span></div>
         <div class="fila"><span>Confirmaciones</span><span id="v-confirm">—</span></div>
         <div class="fila"><span>Modelo</span><span id="v-infer">en espera</span></div>
+        <div class="fila"><span>Próximo chequeo</span><span id="v-prox">—</span></div>
       </div>
 
       <div class="panel">
-        <h2>Zona a vigilar (la alfombra)</h2>
+        <h2>Zona a vigilar</h2>
         <button id="btn-roi" onclick="toggleRoi()">Dibujar zona</button>
         <button onclick="limpiarRoi()">Usar toda la imagen</button>
-        <button onclick="recalibrar()">Recalibrar alfombra vacía</button>
+        <button onclick="recalibrar()">Recalibrar zona vacía</button>
         <p class="msg" id="msg-roi">
-          Marcá las esquinas de la alfombra. Recalibrá cada vez que muevas la cámara.
+          Marcá las 4 esquinas de la hoja (o de la zona). Recalibrá con la zona
+          vacía cada vez que muevas la cámara o cambie mucho la luz.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>Frecuencia de chequeo</h2>
+        <label>Chequear cada <span class="valor" id="l-int">30 s</span></label>
+        <input type="range" id="s-int" min="0" max="120" step="5" value="30">
+        <button class="primario" onclick="guardarIntervalo()">Aplicar</button>
+        <p class="msg" id="msg-int">
+          En cada chequeo se compara la zona contra cómo estaba vacía; si cambió,
+          se le pregunta al modelo. En 0 se chequea sin pausa, todo el tiempo.
         </p>
       </div>
 
@@ -217,14 +249,18 @@
           <input type="checkbox" id="sombras" checked style="width:auto">
           Ignorar sombras
         </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <input type="checkbox" id="exigir-papel" style="width:auto">
+          Exigir que parezca papel (solo para el diario)
+        </label>
         <button class="primario" onclick="guardarColor()">Aplicar</button>
         <p class="msg" id="msg-color"></p>
       </div>
 
       <div class="panel">
-        <h2>Validador 2 · modelo</h2>
+        <h2>Validador 2 · <span id="h2-motor">modelo</span></h2>
         <label>Confianza mínima <span class="valor" id="l-conf">0.37</span></label>
-        <input type="range" id="s-conf" min="0.02" max="0.95" step="0.01" value="0.37">
+        <input type="range" id="s-conf" min="0.01" max="0.95" step="0.01" value="0.37">
         <p class="msg" id="aviso-conf" style="margin:4px 0 0"></p>
         <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
           <input type="checkbox" id="debiles" style="width:auto"> Mostrar detecciones débiles
@@ -234,20 +270,6 @@
         <label>Segundos de estabilidad <span class="valor" id="l-est">3</span></label>
         <input type="range" id="s-est" min="1" max="15" step="1" value="3">
         <button class="primario" onclick="guardarAjustes()">Aplicar</button>
-      </div>
-
-      <div class="panel">
-        <h2>Qué busca el modelo</h2>
-        <label>Nombre para la alarma</label>
-        <input type="text" id="obj-nombre" value="diario">
-        <label>Descripciones en inglés (una por línea)</label>
-        <textarea id="obj-prompts" rows="3">a rolled newspaper
-a newspaper
-a folded newspaper</textarea>
-        <button class="primario" onclick="guardarObjetivo()">Cambiar objetivo</button>
-        <button onclick="preset('diario')">Preset diario</button>
-        <button onclick="preset('anteojos')">Preset anteojos</button>
-        <p class="msg" id="msg-obj"></p>
       </div>
 
       <div class="panel">
@@ -291,6 +313,7 @@ a folded newspaper</textarea>
 <script>
 const $ = id => document.getElementById(id);
 let ws, modoRoi = false, puntosRoi = [], cajas = [], umbralActual = 0.37;
+let intervaloActual = 30;
 
 // ---------------------------------------------------------------- WebSocket
 function conectar() {
@@ -305,8 +328,12 @@ function manejar(d) {
   $('placeholder').style.display = 'none';
   $('video').src = 'data:image/jpeg;base64,' + d.imagen;
 
-  setPill(d.estado, d.estado);
+  const objeto = $('obj-nombre').value.trim() || 'objeto';
+  setPill(d.estado, d.estado === 'diario' ? `¡${objeto}!` : d.estado);
   $('msg').textContent = d.mensaje;
+  $('v-prox').textContent = d.proximo_chequeo >= 0
+    ? `en ${Math.ceil(d.proximo_chequeo)} s`
+    : (intervaloActual > 0 ? 'chequeando ahora…' : 'sin pausa');
 
   // --- medidas ---
   $('v-mov').textContent    = (d.movimiento * 100).toFixed(1) + '%';
@@ -324,7 +351,7 @@ function manejar(d) {
   tarjeta('color', d.color_ok,
     d.color_cambio
       ? `ΔE ${d.color_delta_e.toFixed(0)} · papel ${d.color_papel.toFixed(2)} · ${d.color_area} px`
-      : 'nada nuevo sobre la alfombra');
+      : 'nada nuevo en la zona');
   tarjeta('modelo', d.modelo_ok,
     d.confianza > 0
       ? `confianza ${d.confianza.toFixed(2)} (umbral ${umbralActual.toFixed(2)})`
@@ -437,7 +464,7 @@ function toggleRoi() {
   if (!modoRoi) {
     modoRoi = true; puntosRoi = [];
     $('btn-roi').textContent = 'Cancelar';
-    $('msg-roi').textContent = 'Hacé clic en las esquinas de la alfombra.';
+    $('msg-roi').textContent = 'Hacé clic en las 4 esquinas de la hoja.';
   } else if (puntosRoi.length >= 3) {
     modoRoi = false;
     $('btn-roi').textContent = 'Dibujar zona';
@@ -463,13 +490,13 @@ async function enviarRoi(puntos) {
     body: JSON.stringify({puntos})
   });
   $('msg-roi').textContent = puntos.length
-    ? 'Zona guardada. Recalibrando la alfombra vacía…'
+    ? 'Zona guardada. Recalibrando con la zona vacía…'
     : 'Vigilando toda la imagen.';
 }
 
 async function recalibrar() {
   await fetch('/api/recalibrar', {method: 'POST'});
-  $('msg-roi').textContent = 'Recalibrando… dejá la alfombra vacía unos segundos.';
+  $('msg-roi').textContent = 'Recalibrando… dejá la zona vacía unos segundos.';
 }
 
 // ------------------------------------------------------------------- fusión
@@ -481,7 +508,7 @@ async function cambiarFusion() {
   }).then(r => r.json());
   if (!r.ok) { $('msg-fusion').textContent = r.error; return; }
   $('msg-fusion').textContent = EXPLICA[modo] || '';
-  $('modo-actual').textContent = 'modo ' + modo;
+  $('modo-actual').textContent = `modo ${modo} · ${NOMBRE_MOTOR[motorActual] || ''}`;
 }
 
 const EXPLICA = {
@@ -489,8 +516,8 @@ const EXPLICA = {
   and: 'Los dos validadores tienen que coincidir. Igual de estricto que cascada, pero el modelo corre siempre.',
   or: 'Dispara con que uno solo diga que sí. Más sensible y con más falsos positivos.',
   ponderado: 'Promedia los dos scores con los pesos de config.json. Útil si querés que una señal fuerte compense a la otra.',
-  solo_color: 'Apaga OWLv2. Equivale al detect_diario.py original, pero comparando color en vez de gris.',
-  solo_modelo: 'Apaga la validación de color. Solo decide OWLv2.'
+  solo_color: 'Apaga el modelo. Equivale al detect_diario.py original, pero comparando color en vez de gris.',
+  solo_modelo: 'Apaga la validación de color. Solo decide el modelo.'
 };
 
 // ---------------------------------------------------------------- resolución
@@ -516,6 +543,10 @@ async function cambiarModo() {
 
 // ----------------------------------------------------------------- objetivo
 const PRESETS = {
+  birome:   {nombre: 'birome',
+             prompts: ['a pen', 'a ballpoint pen']},
+  lapiz:    {nombre: 'lápiz',
+             prompts: ['a pencil', 'a yellow pencil']},
   diario:   {nombre: 'diario',
              prompts: ['a rolled newspaper', 'a newspaper', 'a folded newspaper']},
   anteojos: {nombre: 'anteojos',
@@ -536,8 +567,24 @@ async function guardarObjetivo() {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({nombre, prompts})
   }).then(r => r.json());
-  $('msg-obj').textContent = `Buscando: ${r.prompts.join(', ')}`;
+  $('msg-obj').textContent = `Buscando: ${r.prompts.join(', ')}. Chequeando ya…`;
+  $('tit-objeto').textContent = r.nombre || nombre;
   silenciar();
+}
+
+// ------------------------------------------------------- frecuencia chequeo
+function textoIntervalo(v) { return v > 0 ? `${v} s` : 'sin pausa'; }
+
+async function guardarIntervalo() {
+  const intervalo_chequeo = parseInt($('s-int').value);
+  await fetch('/api/ajustes', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({intervalo_chequeo})
+  });
+  intervaloActual = intervalo_chequeo;
+  $('msg-int').textContent = intervalo_chequeo > 0
+    ? `Chequeando cada ${intervalo_chequeo} s. El primero arranca ya.`
+    : 'Chequeando sin pausa, todo el tiempo.';
 }
 
 // ------------------------------------------------------------------ ajustes
@@ -550,20 +597,68 @@ async function guardarObjetivo() {
 ['de','area','papel'].forEach(k => {
   $('s-'+k).addEventListener('input', e => { $('l-'+k).textContent = e.target.value; });
 });
+$('s-int').addEventListener('input', e => {
+  $('l-int').textContent = textoIntervalo(parseInt(e.target.value));
+});
+
+// Los puntajes de cada motor viven en escalas distintas: un 0.12 es una buena
+// detección para YOLO-World y ruido para OWLv2. Por eso cada uno tiene sus avisos.
+const NOMBRE_MOTOR = {yolo_world: 'YOLO-World', owlv2: 'OWLv2', claude: 'Claude',
+                      openrouter: 'OpenRouter'};
+const EN_LA_NUBE = m => m === 'claude' || m === 'openrouter';
+let motorActual = 'owlv2';
+
+function avisoConfianza() {
+  if (motorActual === 'yolo_world') return avisoConfianzaYolo();
+  if (EN_LA_NUBE(motorActual)) return avisoConfianzaClaude();
+  avisoConfianzaOwl();
+}
+
+// Con Claude el puntaje sí es una probabilidad que estima el modelo.
+function avisoConfianzaClaude() {
+  const el = $('aviso-conf');
+  if (umbralActual >= 0.9) {
+    el.innerHTML = '<span style="color:var(--warn)">Muy exigente: solo avisa ' +
+      'si el modelo está casi seguro.</span>';
+  } else if (umbralActual >= 0.5) {
+    el.innerHTML = '<span style="color:var(--ok)">Con Claude el puntaje es la ' +
+      'probabilidad de que el objeto esté. Zona recomendada.</span>';
+  } else {
+    el.innerHTML = '<span style="color:var(--warn)">Avisa aunque el modelo crea ' +
+      'que es más probable que NO esté.</span>';
+  }
+}
+
+function avisoConfianzaYolo() {
+  const el = $('aviso-conf');
+  if (umbralActual >= 0.20) {
+    el.innerHTML = '<span style="color:var(--warn)">Muy exigente para YOLO-World: ' +
+      'en las pruebas el diario real dio 0.12. Con este umbral no dispararía.</span>';
+  } else if (umbralActual >= 0.10) {
+    el.innerHTML = '<span style="color:var(--warn)">Exigente: está justo en el ' +
+      'puntaje del diario real (0.12).</span>';
+  } else if (umbralActual >= 0.02) {
+    el.innerHTML = '<span style="color:var(--ok)">Zona recomendada para YOLO-World: ' +
+      'entre lo que no es (0.00–0.004) y lo que sí (lápiz 0.04, diario 0.12). ' +
+      'Calibralo con "Mostrar detecciones débiles".</span>';
+  } else {
+    el.innerHTML = '<span style="color:var(--warn)">Muy permisivo: vas a ' +
+      'tener falsos positivos.</span>';
+  }
+}
 
 // OWLv2 no devuelve probabilidades calibradas: 0.6 ya es una detección fuerte.
-function avisoConfianza() {
+function avisoConfianzaOwl() {
   const el = $('aviso-conf');
   if (umbralActual >= 0.65) {
-    el.innerHTML = '<span style="color:var(--warn)">Muy exigente. En las fotos ' +
-      'de prueba el diario dio 0.62 (a 960) y 0.32 (a 640): con este umbral ' +
-      'no dispararía nunca.</span>';
+    el.innerHTML = '<span style="color:var(--warn)">Muy exigente. En fotos reales ' +
+      'las biromes dieron 0.48–0.72 (a 320): con este umbral no dispararía.</span>';
   } else if (umbralActual >= 0.45) {
-    el.innerHTML = '<span style="color:var(--warn)">Exigente: sólo detecta ' +
-      'objetos muy claros y bien iluminados.</span>';
-  } else if (umbralActual >= 0.30) {
-    el.innerHTML = '<span style="color:var(--ok)">Zona recomendada: bien ' +
-      'lejos del ruido (0.05) y del objeto real (0.32–0.62).</span>';
+    el.innerHTML = '<span style="color:var(--warn)">Exigente: está justo en el ' +
+      'puntaje de las biromes reales (0.48–0.72 a 320).</span>';
+  } else if (umbralActual >= 0.20) {
+    el.innerHTML = '<span style="color:var(--ok)">Zona recomendada (a 320): entre ' +
+      'lo que no es (0.08 o menos) y lo que sí (biromes 0.48–0.72).</span>';
   } else if (umbralActual < 0.12) {
     el.innerHTML = '<span style="color:var(--warn)">Muy permisivo: vas a ' +
       'tener falsos positivos.</span>';
@@ -590,7 +685,8 @@ async function guardarColor() {
       delta_e_minimo:   parseFloat($('s-de').value),
       area_minima:      parseInt($('s-area').value),
       papel_minimo:     parseFloat($('s-papel').value),
-      ignorar_sombras:  $('sombras').checked
+      ignorar_sombras:  $('sombras').checked,
+      exigir_papel:     $('exigir-papel').checked
     })
   });
   $('msg-color').textContent = 'Umbrales de color aplicados.';
@@ -627,11 +723,22 @@ if ('Notification' in window && Notification.permission === 'default')
   Notification.requestPermission();
 
 fetch('/api/config').then(r => r.json()).then(c => {
-  $('s-conf').value = c.modelo.confianza_minima;
-  $('l-conf').textContent = c.modelo.confianza_minima;
-  umbralActual = c.modelo.confianza_minima;
-  $('debiles').checked = !!c.modelo.mostrar_debiles;
-  if (c.modelo.resolucion) $('res').value = String(c.modelo.resolucion);
+  // Lo común está en c.modelo; umbral y resolución, en la sección del motor.
+  motorActual = c.modelo.motor || 'owlv2';
+  const mc = Object.assign({}, c.modelo, c.modelo[motorActual] || {});
+  $('tit-motor').textContent = NOMBRE_MOTOR[motorActual];
+  $('h2-motor').textContent = NOMBRE_MOTOR[motorActual];
+  if (EN_LA_NUBE(motorActual)) {
+    $('lbl-prompts').textContent = 'Descripciones (una por línea; podés escribir en español)';
+    $('msg-obj').textContent = 'Entiende español. Al cambiarlo se hace un chequeo ' +
+      'enseguida. Cada consulta sube el recorte de la imagen a ' +
+      (motorActual === 'claude' ? 'la API de Anthropic.' : 'OpenRouter y al proveedor del modelo.');
+  }
+  $('s-conf').value = mc.confianza_minima;
+  $('l-conf').textContent = mc.confianza_minima;
+  umbralActual = mc.confianza_minima;
+  $('debiles').checked = !!mc.mostrar_debiles;
+  if (mc.resolucion) $('res').value = String(mc.resolucion);
   avisoConfianza();
 
   $('s-mov').value = c.deteccion.umbral_movimiento;
@@ -644,13 +751,19 @@ fetch('/api/config').then(r => r.json()).then(c => {
   if (col.area_minima != null)    { $('s-area').value = col.area_minima; $('l-area').textContent = col.area_minima; }
   if (col.papel_minimo != null)   { $('s-papel').value = col.papel_minimo; $('l-papel').textContent = col.papel_minimo; }
   $('sombras').checked = col.ignorar_sombras !== false;
+  $('exigir-papel').checked = !!col.exigir_papel;
+
+  intervaloActual = c.deteccion.intervalo_chequeo ?? 0;
+  $('s-int').value = intervaloActual;
+  $('l-int').textContent = textoIntervalo(intervaloActual);
 
   const modo = (c.fusion || {}).modo || 'cascada';
   $('fusion').value = modo;
   $('msg-fusion').textContent = EXPLICA[modo] || '';
-  $('modo-actual').textContent = 'modo ' + modo;
+  $('modo-actual').textContent = `modo ${modo} · ${NOMBRE_MOTOR[motorActual]}`;
 
   $('obj-nombre').value  = c.modelo.nombre_objeto || 'diario';
+  $('tit-objeto').textContent = c.modelo.nombre_objeto || 'el objeto';
   $('obj-prompts').value = (c.modelo.prompts || []).join('\n');
   if (c.roi.activa) { puntosRoi = c.roi.puntos; dibujar(); }
 });

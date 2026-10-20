@@ -75,6 +75,34 @@ class ResultadoColor:
     papel: float = 0.0          # score de "parece papel" de la región más grande
     regiones: list[Region] = field(default_factory=list)
     motivo: str = ""
+    # Qué píxeles cambiaron (255) y cuáles no (0). Sirve para comprobar que lo
+    # que encuentra el modelo esté sobre lo nuevo y no sobre algo que ya estaba.
+    mascara: np.ndarray | None = field(default=None, repr=False)
+
+    def cubre(self, x1: float, y1: float, x2: float, y2: float) -> float:
+        """Fracción de todo lo que cambió que cae dentro de la caja."""
+        if self.mascara is None:
+            return 0.0
+        total = np.count_nonzero(self.mascara)
+        if total == 0:
+            return 0.0
+        h, w = self.mascara.shape[:2]
+        x1, y1 = max(0, int(x1)), max(0, int(y1))
+        x2, y2 = min(w, int(x2)), min(h, int(y2))
+        if x2 <= x1 or y2 <= y1:
+            return 0.0
+        return float(np.count_nonzero(self.mascara[y1:y2, x1:x2])) / total
+
+    def solape(self, x1: float, y1: float, x2: float, y2: float) -> float:
+        """Fracción de la caja (en coordenadas del frame) que cambió."""
+        if self.mascara is None:
+            return 0.0
+        h, w = self.mascara.shape[:2]
+        x1, y1 = max(0, int(x1)), max(0, int(y1))
+        x2, y2 = min(w, int(x2)), min(h, int(y2))
+        if x2 <= x1 or y2 <= y1:
+            return 0.0
+        return float(np.count_nonzero(self.mascara[y1:y2, x1:x2])) / ((x2 - x1) * (y2 - y1))
 
     @property
     def cajas(self) -> list[dict]:
@@ -89,6 +117,14 @@ class ValidadorColor:
         self.area_minima = int(cfg.get("area_minima", 1500))
         self.ignorar_sombras = bool(cfg.get("ignorar_sombras", True))
         self.croma_sombra = float(cfg.get("croma_sombra", 6.0))
+        # Una sombra oscurece, pero no hasta el negro: la zona conserva al
+        # menos esta fracción de su luminosidad. Una birome negra sobre una
+        # hoja blanca la baja a ~0.1 y por eso NO es sombra.
+        self.sombra_luz_min = float(cfg.get("sombra_luz_min", 0.45))
+        # Para el diario sirve exigir que el objeto "parezca papel". Para
+        # cualquier otro objeto (un lápiz sobre una hoja) hay que apagarlo:
+        # quien decide qué es el objeto es el modelo, con el prompt.
+        self.exigir_papel = bool(cfg.get("exigir_papel", False))
         self.frames_calibracion = int(cfg.get("frames_calibracion", 15))
         # Umbrales del score "parece papel"
         self.sat_max = float(cfg.get("saturacion_maxima", 90.0))
@@ -102,6 +138,11 @@ class ValidadorColor:
         self._buffer: list[np.ndarray] = []
 
     # ------------------------------------------------------------- calibración
+    @property
+    def umbral_papel(self) -> float:
+        """Umbral de "parece papel" que usa la fusión: 0 si no se exige."""
+        return self.papel_minimo if self.exigir_papel else 0.0
+
     @property
     def calibrado(self) -> bool:
         return self.fondo_lab is not None
@@ -186,9 +227,12 @@ class ValidadorColor:
         cambio = delta_e > self.delta_e_min
 
         if self.ignorar_sombras:
-            # Sombra = se oscureció sin cambiar de tono. Un diario, al revés,
-            # aclara la zona (dL > 0) o cambia el tono (croma alto).
-            sombra = (d_luz < 0) & (d_croma < self.croma_sombra)
+            # Sombra = se oscureció sin cambiar de tono, y sin llegar al negro.
+            # Un diario aclara la zona (dL > 0) o cambia el tono (croma alto);
+            # un objeto negro la oscurece mucho más de lo que oscurece una
+            # sombra, que deja pasar buena parte de la luz.
+            conserva_luz = actual[..., 0] >= self.sombra_luz_min * self.fondo_lab[..., 0]
+            sombra = (d_luz < 0) & (d_croma < self.croma_sombra) & conserva_luz
             cambio &= ~sombra
 
         mascara = (cambio.astype(np.uint8)) * 255
@@ -247,15 +291,17 @@ class ValidadorColor:
         if not regiones:
             return ResultadoColor(
                 cobertura=cobertura,
+                mascara=mascara,
                 motivo="sin regiones por encima del área mínima",
             )
 
         regiones.sort(key=lambda r: r.area, reverse=True)
         principal = regiones[0]
 
-        # El score mezcla "qué tan distinto es el color" con "qué tanto parece
-        # papel". Una mancha enorme de color rarísimo no debería disparar la
-        # alarma de diario, y una manchita muy papel tampoco.
+        # Con exigir_papel, el score mezcla "qué tan distinto es el color" con
+        # "qué tanto parece papel": una mancha enorme de color rarísimo no
+        # debería disparar la alarma de diario, y una manchita muy papel
+        # tampoco. Sin exigir_papel, solo cuenta cuánto cambió el color.
         f_delta = float(
             np.clip(
                 (principal.delta_e - self.delta_e_min)
@@ -263,7 +309,11 @@ class ValidadorColor:
                 0.0, 1.0,
             )
         )
-        score = float(np.clip(0.4 * f_delta + 0.6 * principal.papel, 0.0, 1.0))
+        score = (
+            float(np.clip(0.4 * f_delta + 0.6 * principal.papel, 0.0, 1.0))
+            if self.exigir_papel
+            else f_delta
+        )
 
         return ResultadoColor(
             hay_cambio=True,
@@ -273,6 +323,7 @@ class ValidadorColor:
             delta_e=principal.delta_e,
             papel=principal.papel,
             regiones=regiones,
+            mascara=mascara,
             motivo=(
                 f"{len(regiones)} región(es), ΔE={principal.delta_e:.1f}, "
                 f"papel={principal.papel:.2f}"

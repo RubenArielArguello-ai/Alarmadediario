@@ -8,10 +8,22 @@
   "roi": {
     "activa": false,
     "puntos": [
-      [0.1, 0.3],
-      [0.9, 0.3],
-      [0.9, 0.95],
-      [0.1, 0.95]
+      [
+        0.1,
+        0.3
+      ],
+      [
+        0.9,
+        0.3
+      ],
+      [
+        0.9,
+        0.95
+      ],
+      [
+        0.1,
+        0.95
+      ]
     ],
     "_comentario": "La alfombra, en coordenadas relativas 0-1. Se dibuja desde la UI."
   },
@@ -23,18 +35,23 @@
     "_area_nota": "Mismo valor que el detect_diario.py original, en pixeles.",
     "ignorar_sombras": true,
     "croma_sombra": 6.0,
-    "_sombras_nota": "Una sombra oscurece (dL<0) sin cambiar el tono (croma bajo). Un diario aclara la zona o cambia el tono. Poner en false si la alfombra es blanca.",
+    "sombra_luz_min": 0.45,
+    "_sombras_nota": "Una sombra oscurece (dL<0) sin cambiar el tono (croma bajo) y conservando al menos sombra_luz_min de la luz. Un objeto negro sobre una hoja blanca la baja mucho mas, por eso no se confunde con sombra.",
+    "exigir_papel": false,
+    "_exigir_papel_nota": "true solo para el diario: el color ademas exige que el objeto parezca papel. Para cualquier otro objeto (lapiz, llaves...) dejarlo en false y que decida el modelo con el prompt.",
     "frames_calibracion": 15,
     "saturacion_maxima": 90.0,
     "brillo_minimo": 90.0,
     "contraste_referencia": 45.0,
     "papel_minimo": 0.35,
-    "_papel_nota": "Score 0-1 que mezcla poca saturacion + buen brillo + mucho contraste interno (el texto impreso). Por debajo de papel_minimo, el color no vota que si."
+    "_papel_nota": "Score 0-1 que mezcla poca saturacion + buen brillo + mucho contraste interno (el texto impreso). Por debajo de papel_minimo, el color no vota que si.",
+    "cobertura_maxima": 0.6,
+    "_cobertura_maxima_nota": "Si cambia mas que esta fraccion de la zona no es un objeto: se movio la hoja o la camara, o cambio la luz. Se espera a que quede quieta y se recalibra. En una prueba real una falsa alarma vino de un cambio del 70%. 1 = nunca."
   },
   "modelo": {
-    "_que_es": "Validador 2: OWLv2 confirma que el objeto es un diario.",
-    "id": "google/owlv2-base-patch16-ensemble",
-    "carpeta_local": "modelos",
+    "_que_es": "Validador 2: confirma que el objeto es el que dice el prompt.",
+    "motor": "owlv2",
+    "_motor_opciones": "owlv2 (default): local y sin costo; a 320 tarda ~0.8 s por consulta en una Mac Intel i7 de 2 nucleos | claude: verifica con la API de Anthropic; entiende espanol y distingue objetos parecidos; necesita ANTHROPIC_API_KEY y cada consulta cuesta | openrouter: lo mismo pero via OpenRouter, que con una clave da acceso a Claude, Gemini, GPT y otros; necesita OPENROUTER_API_KEY | yolo_world: local y rapido, pero en una prueba real confundio anteojos con una birome. Cada uno tiene su seccion abajo.",
     "device": "auto",
     "_device_opciones": "auto | mps (Apple Silicon) | cuda | cpu",
     "nombre_objeto": "diario",
@@ -43,16 +60,58 @@
       "a newspaper",
       "a folded newspaper"
     ],
+    "_prompts_nota": "En ingles. En espanol no entiende: con OWLv2, 'un lapiz' dio 0.02 contra 0.90 de 'a pencil'. Mas de una descripcion ayuda: para una birome, 'a pen' + 'a ballpoint pen' dio 0.48 en el peor caso contra 0.36 de 'a pen' solo.",
     "_prompts_anteojos": [
       "a pair of eyeglasses",
       "glasses",
       "sunglasses"
     ],
-    "resolucion": 640,
-    "_resolucion_nota": "960 nativa (lenta), 768, 640, 480, 320. Medido: 960->conf 0.62 en ~30s | 768->0.46 | 640->0.32 | 480->0.29 | 320->0.45 pero con falsos positivos. Con el recorte que le pasa el validador de color, 640 alcanza.",
-    "confianza_minima": 0.37,
     "mostrar_debiles": false,
-    "_confianza_nota": "Los scores de OWLv2 NO son probabilidades calibradas. Medido en fotos reales: ruido hasta 0.05, diario 0.62 a resolucion 960 y 0.32 a 640. No subas de 0.5 o deja de detectar."
+    "yolo_world": {
+      "pesos": "yolov8s-worldv2.pt",
+      "_pesos_opciones": "yolov8s-worldv2.pt (0.6 s) | yolov8m-worldv2.pt (1.8 s) | yolov8l-worldv2.pt (2.4 s). En las pruebas el S fue el que mejor reconocio el diario real.",
+      "carpeta_local": "modelos_yolo",
+      "resolucion": 640,
+      "_resolucion_nota": "Con la imagen entera o con mas contexto alrededor del objeto reconoce PEOR que con el recorte: el diario real bajo de 0.14 a 0.01.",
+      "confianza_minima": 0.03,
+      "umbral_vista": 0.005,
+      "_confianza_nota": "NO es comparable con el umbral de OWLv2. Puntajes medidos sobre el recorte que arma la app: diario real 0.12, lapiz dibujado 0.042, birome negra 0.004, alfombra vacia 0.0004. 0.03 queda entre lo que es y lo que no. Es EL valor a calibrar con la camara real: activa 'Mostrar detecciones debiles' para ver los puntajes."
+    },
+    "owlv2": {
+      "id": "google/owlv2-base-patch16-ensemble",
+      "carpeta_local": "modelos",
+      "resolucion": 320,
+      "_resolucion_nota": "Barrido sobre fotos reales de un escritorio (3 biromes; anteojos, control remoto, celular, mano y hoja vacia), con el recorte de la app y 'a pen' + 'a ballpoint pen'. Peor si / peor no / tiempo: 256 -> 0.51 / 0.13 / 0.7 s | 320 -> 0.48 / 0.08 / 1.1 s (la mejor separacion) | 352 -> 0.36 / 0.12 / 1.4 s | 384 -> 0.32 / 0.18 / 1.6 s. Mas resolucion no ayuda con el recorte. Con la foto ENTERA, 320 daba falsos positivos.",
+      "confianza_minima": 0.3,
+      "_confianza_nota": "Los scores de OWLv2 NO son probabilidades. A 320, en fotos reales: todo lo que no es birome 0.00-0.08, biromes 0.48-0.72. 0.30 queda en el medio. Recalibralo si cambias la resolucion.",
+      "hilos": 0,
+      "_hilos_nota": "0 = uno por nucleo fisico. En una Mac Intel de 2 nucleos y 4 hilos logicos: 2 hilos 1.10 s, 4 hilos 1.30 s."
+    },
+    "claude": {
+      "modelo": "claude-opus-5-5",
+      "_modelo_opciones": "claude-opus-5-5 (US$ 4 / US$ 20 por millon de tokens de entrada / salida) | claude-sonnet-5-5 (2 / 10) | claude-haiku-5-5 (0.10 / 0.50; el mas rapido y barato, sin respaldo si declina una consulta)",
+      "esfuerzo": "low",
+      "_esfuerzo_nota": "low | medium | high. Para decidir si un objeto esta en una imagen alcanza low: responde mas rapido y gasta menos.",
+      "resolucion": 768,
+      "_resolucion_nota": "Lado maximo en pixeles del recorte que se sube. El recorte ya viene centrado en el objeto: mas chico = menos tokens y menos demora.",
+      "confianza_minima": 0.6,
+      "_confianza_nota": "Aca SI es una probabilidad (0 a 1) que estima el modelo de que el objeto este.",
+      "confirmaciones_necesarias": 1,
+      "_confirmaciones_nota": "Pisa a deteccion.confirmaciones_necesarias para este motor: cada consulta cuesta y una alcanza.",
+      "timeout_s": 30,
+      "_privacidad": "Cada consulta sube el recorte de la imagen a la API de Anthropic. Necesita ANTHROPIC_API_KEY en el entorno del servidor."
+    },
+    "openrouter": {
+      "modelo": "anthropic/claude-opus-5.5",
+      "_modelo_opciones": "Cualquier modelo de https://openrouter.ai/models con imagen y salida estructurada. Precios al 19/10/2026, US$ por millon de tokens (entrada / salida): anthropic/claude-opus-5.5 4 / 20 | anthropic/claude-sonnet-5.5 2 / 10 | anthropic/claude-haiku-5.5 0.10 / 0.50 | google/gemini-2.5-flash 0.30 / 2.50 | openai/gpt-5-mini 0.25 / 2",
+      "resolucion": 768,
+      "_resolucion_nota": "Lado maximo en pixeles del recorte que se sube.",
+      "confianza_minima": 0.6,
+      "_confianza_nota": "Probabilidad (0 a 1) que estima el modelo de que el objeto este.",
+      "confirmaciones_necesarias": 1,
+      "timeout_s": 30,
+      "_privacidad": "Cada consulta sube el recorte de la imagen a OpenRouter y al proveedor del modelo. Necesita OPENROUTER_API_KEY en el entorno del servidor."
+    }
   },
   "fusion": {
     "_que_es": "Como se combinan los dos validadores para dar un veredicto unico.",
@@ -64,16 +123,26 @@
     "_pesos_nota": "Solo se usan en modo ponderado."
   },
   "deteccion": {
+    "intervalo_chequeo": 30,
+    "_intervalo_chequeo_desc": "Cada cuantos segundos se compara la zona contra la referencia vacia. 0 = todos los frames, sin pausa",
+    "max_segundos_chequeo": 30,
+    "_max_segundos_chequeo_desc": "Si un chequeo no puede concluir en este tiempo (hay una mano encima), se abandona hasta el proximo",
     "umbral_movimiento": 0.02,
     "_umbral_movimiento_desc": "Fraccion de pixeles que deben cambiar entre frames para considerar que hay movimiento",
     "segundos_estabilidad": 3.0,
     "_segundos_estabilidad_desc": "La escena debe estar quieta este tiempo antes de correr el modelo",
     "confirmaciones_necesarias": 2,
     "_confirmaciones_desc": "Veredictos positivos seguidos antes de disparar la alarma",
-    "segundos_entre_inferencias": 2.0,
-    "cooldown_alarma": 60.0,
+    "segundos_entre_inferencias": 1.0,
+    "cooldown_alarma": 30.0,
+    "_cooldown_desc": "Segundos minimos entre dos alarmas. Igual al intervalo de chequeo para que sacar y volver a poner el objeto dispare de nuevo en el chequeo siguiente",
     "margen_recorte": 40,
-    "_margen_recorte_desc": "Pixeles de contexto alrededor de la region de color que se le pasa al modelo"
+    "_margen_recorte_desc": "Pixeles de contexto alrededor de la region de color que se le pasa al modelo",
+    "solape_minimo": 0.15,
+    "_solape_minimo_desc": "Una deteccion del modelo solo cuenta si su centro esta en la zona y su caja contiene al menos esta fraccion de todo lo que cambio. Evita que cuente algo que ya estaba (en una prueba real, un control remoto al borde de la hoja).",
+    "_segundos_entre_inferencias_desc": "Pausa minima entre dos consultas al modelo. Cada consulta de OWLv2 a 320 tarda ~1 s: con 1 s la segunda confirmacion llega enseguida.",
+    "recorte_lado_minimo": 288,
+    "_recorte_lado_minimo_desc": "Si lo que cambio es chico (la tapa de una birome transparente), el recorte que ve el modelo se agranda hasta este lado. Medido con fotos reales: birome detectada 75% -> 100% de las veces, anteojos 0% -> 0%."
   },
   "guardado": {
     "guardar_capturas": true,
