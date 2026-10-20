@@ -1,12 +1,25 @@
 {
-    "total_procesadas": 1,
-    "exitosas": 1,
+    "total_procesadas": 2,
+    "exitosas": 2,
     "fallidas": 0,
     "detalles": [
         {
-            "imagen": "resultado_marcado_20260809_212348.jpg",
+            "imagen": "PHOTO-sindiario.jpg",
+            "descripcion": "Escena sin diario",
+            "esperado_detectado": false,
+            "detectado": false,
+            "acierto": true,
             "estado": "OK",
-            "resultado": "(False, 'capturas/resultado_binaria_20260810_144417.png', 'capturas/resultado_marcado_20260810_144417.jpg', [])"
+            "resultado": "(False, 'capturas/resultado_binaria_20261020_163056.png', 'capturas/resultado_marcado_20261020_163056.jpg', [])"
+        },
+        {
+            "imagen": "PHOTO-diario.jpg",
+            "descripcion": "Escena con diario",
+            "esperado_detectado": true,
+            "detectado": true,
+            "acierto": true,
+            "estado": "OK",
+            "resultado": "(True, 'capturas/resultado_binaria_20261020_163056.png', 'capturas/resultado_marcado_20261020_163056.jpg', [{'area': 14657, 'x': 623, 'y': 452, 'w': 476, 'h': 136, 'crop': '', 'source_image': ''}, {'area': 43483, 'x': 651, 'y': 343, 'w': 461, 'h': 209, 'crop': '', 'source_image': ''}])"
         }
     ]
 }
