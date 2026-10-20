@@ -1,8 +1,8 @@
 # Alarma de Diario — detector híbrido
 
 Une los dos proyectos en un solo programa: la **diferencia de color en una zona
-vigilada** decide *si apareció algo*, y **OWLv2** decide *si eso es lo que
-buscamos*. Qué se busca se escribe en la web, en texto libre: un diario sobre la
+vigilada** decide *si apareció algo*, y un **modelo de visión** (YOLO-World u
+OWLv2) decide *si eso es lo que buscamos*. Qué se busca se escribe en la web, en texto libre: un diario sobre la
 alfombra de la entrada, o un lápiz sobre una hoja en un escritorio.
 
 Nada del proyecto original se modificó. `detect_diario.py`, `harness/run_eval.py`
@@ -17,11 +17,13 @@ nuevo vive en esta carpeta.
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r hibrido/requirements.txt
-python hibrido/descargar_modelo.py     # ~620 MB, una sola vez
+python hibrido/descargar_modelo.py           # YOLO-World: ~375 MB, una sola vez
+python hibrido/descargar_modelo.py --todos   # además OWLv2: ~620 MB más
 ```
 
-Los pesos quedan en `hibrido/modelos/` y están en `.gitignore`: no van al repo.
-Después de bajarlos, todo funciona sin internet.
+Los pesos quedan en `hibrido/modelos_yolo/` (YOLO-World y su codificador de
+texto CLIP) y `hibrido/modelos/` (OWLv2), los dos en `.gitignore`: no van al
+repo. Después de bajarlos, todo funciona sin internet.
 
 ## Uso
 
@@ -80,7 +82,7 @@ frame de cámara (fija)
      |   ¿cambió algo en la zona respecto de cuando estaba vacía?
      |   si no ve nada, acá se corta y el modelo nunca se despierta
      v
-[3] OWLv2 (~5-30 s en CPU, según resolución)
+[3] modelo: YOLO-World (~0.6 s) u OWLv2 (~1-9 s según resolución)
      |   ¿eso que hay ahí es lo que dice el prompt?
      |   recibe SOLO el recorte que marcó el color, no el frame entero
      v
@@ -134,11 +136,48 @@ gris una sombra y un diario se parecen demasiado. Este compara en espacio
   Para cualquier otro objeto se deja apagado: un lápiz no parece papel, y qué
   objeto es lo decide el modelo con el prompt.
 
-### Validador 2 — OWLv2 (`modelo.py`)
+### Validador 2 — el modelo (`modelo_yolo.py`, `modelo.py`)
 
-Detector de vocabulario abierto: acepta descripciones en texto libre
-(`"a rolled newspaper"`) y devuelve cajas, sin entrenar nada. Se puede cambiar
-qué busca desde la UI, en caliente.
+Detectores de vocabulario abierto: aceptan descripciones en texto libre
+(`"a rolled newspaper"`) y devuelven cajas, sin entrenar nada. Qué buscan se
+cambia desde la web, en caliente. Hay dos, y se elige cuál con
+`modelo.motor` en `config.json` o con `python hibrido/server.py --motor owlv2`:
+
+| motor | tiempo por consulta* | diario real | lápiz | birome (no) | zona vacía (no) | umbral |
+|---|---|---|---|---|---|---|
+| **YOLO-World S @ 640** (default) | **~0.6 s** | 0.12 | 0.04 | 0.004 | 0.000 | 0.03 |
+| OWLv2 @ 640 | ~9.4 s | 0.95 | 0.90 | 0.10 | 0.00 | 0.37 |
+| OWLv2 @ 480 | ~3.8 s | 0.93 | 0.85 | 0.17 | 0.01 | 0.37 |
+| OWLv2 @ 320 | ~1.2 s | 0.81 | 0.77 | 0.17 | 0.03 | 0.37 |
+
+\* Mac Intel i7-7567U (2 núcleos), sobre el recorte que arma el validador de
+color. El lápiz y la birome son dibujados; el diario y la zona vacía, fotos
+reales de la entrada.
+
+YOLO-World es 15 veces más rápido. La separación entre lo que es y lo que no
+es parecida en los dos (unas 10 veces), pero en YOLO-World todo vive en números
+diez o veinte veces más chicos, así que un poco de ruido pesa mucho más. Por eso cada motor tiene su propio
+umbral en su sección de `config.json`, y **el de YOLO-World es lo primero que
+hay que calibrar con la cámara real**: activá `Mostrar detecciones débiles` en
+la web para ver los puntajes de lo que apoyás.
+
+Cosas medidas que conviene saber de YOLO-World:
+
+- Con más contexto alrededor del objeto, o con la foto entera, reconoce
+  **peor**: el diario real baja de 0.14 a 0.01. Por eso recibe el mismo
+  recorte que OWLv2.
+- El prompt importa mucho: sobre el mismo recorte, el lápiz dio 0.009 con
+  `pencil` solo y 0.042 con `pencil` + `yellow pencil`.
+- Los modelos más grandes (`yolov8m`, `yolov8l`) no reconocieron mejor el
+  diario y tardan 3–4 veces más.
+- Cambiar el prompt tarda ~7 s (CLIP codifica el texto); corre en paralelo y
+  no congela el video.
+- Ultralytics manda por defecto estadísticas de uso (CPU, versiones; no
+  imágenes) a Google Analytics. La app lo apaga al cargar el modelo, solo para
+  su proceso.
+
+**Los prompts van en inglés.** En español ninguno de los dos entiende: con
+OWLv2, `un lápiz` dio 0.02 contra 0.90 de `a pencil`.
 
 ### Fusión (`fusion.py`)
 
@@ -148,7 +187,7 @@ qué busca desde la UI, en caliente.
 | `and` | los dos tienen que coincidir | igual de estricto, pero el modelo corre siempre |
 | `or` | con que uno diga que sí, alcanza | más sensible, más falsos positivos |
 | `ponderado` | promedio pesado de los dos scores | si querés que una señal fuerte compense a la otra |
-| `solo_color` | apaga OWLv2 | equivale al proyecto original, pero en color |
+| `solo_color` | apaga el modelo | equivale al proyecto original, pero en color |
 | `solo_modelo` | apaga la validación de color | para medir cuánto aporta el color |
 
 Se cambia desde la UI o con `python hibrido/server.py --modo and`.
@@ -234,8 +273,13 @@ Todo está en `config.json`, comentado con claves `_nota`. Los que más importan
   parecer. Diario real: 0.59. Objeto rojo: 0.21.
 - `color.sombra_luz_min` (0.45) — una zona que se oscurece sin cambiar de tono
   cuenta como sombra solo si conserva al menos esta fracción de su luz.
-- `modelo.confianza_minima` (0.37) — **los scores de OWLv2 no son
-  probabilidades calibradas**. Ruido hasta 0.05, diario 0.32–0.90 según recorte
+- `modelo.motor` (`yolo_world`) — qué modelo reconoce el objeto: `yolo_world`
+  u `owlv2`. Lo común a los dos (prompts, nombre, device) está en `modelo`; el
+  umbral y la resolución, en la sección de cada uno.
+- `modelo.yolo_world.confianza_minima` (0.03) — ver la tabla de arriba.
+  Calibralo con la cámara real.
+- `modelo.owlv2.confianza_minima` (0.37) — **los scores de OWLv2 no son
+  probabilidades calibradas**. Ruido hasta 0.05, diario 0.32–0.95 según recorte
   y resolución. No lo subas de 0.5 o deja de detectar.
 - `deteccion.confirmaciones_necesarias` (2) — veredictos positivos seguidos
   antes de disparar.
@@ -301,7 +345,7 @@ alarma, en los 4 modos.
 ## Verificación del chequeo periódico (hoja blanca + lápiz)
 
 Simulación de una sesión con la cámara fija, recuadro sobre la hoja, chequeo
-cada 30 s, OWLv2 real y el prompt `a pencil` / `a yellow pencil`. Las escenas
+cada 30 s, el modelo real y el prompt `a pencil` / `a yellow pencil`. Las escenas
 son sintéticas (un lápiz y una birome dibujados sobre una hoja), y el reloj es
 simulado: avanza 0.1 s por frame pero no mientras corre una inferencia.
 
@@ -315,9 +359,13 @@ simulado: avanza 0.1 s por frame pero no mientras corre una inferencia.
 | 110 | se saca la birome | chequeo a 131.5 s: sin cambios |
 | 140 | se vuelve a apoyar el lápiz | **segunda alarma a 166.6 s** |
 
-Seis inferencias en total. Cada una tardó entre 6 y 30 s reales en la CPU de una
-Mac Intel a resolución 640, que en la simulación no cuentan: en la vida real, la
-alarma llega entre 15 y 60 s más tarde de lo que muestra la tabla.
+La tabla es con OWLv2. Con YOLO-World (umbral 0.03) el resultado es el mismo:
+las dos alarmas en los mismos instantes, la birome descartada (0.000) y el
+atajo sin modelo; el lápiz dio 0.042.
+
+Seis inferencias en total, que en la simulación no cuentan tiempo. En la vida
+real cada una tardó entre 6 y 30 s con OWLv2 a 640 (la alarma llega 15–60 s
+más tarde de lo que muestra la tabla) y entre 0.7 y 3.6 s con YOLO-World.
 
 ## Límite conocido
 

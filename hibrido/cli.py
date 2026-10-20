@@ -30,7 +30,7 @@ for p in (str(AQUI), str(RAIZ_REPO)):
         sys.path.insert(0, p)
 
 from fusion import Fusion  # noqa: E402
-from modelo import DetectorOWL  # noqa: E402
+from modelo import config_motor, crear_motor  # noqa: E402
 from validador_color import ValidadorColor  # noqa: E402
 
 
@@ -52,7 +52,9 @@ def main() -> int:
     ap.add_argument("--nombre", help="Nombre del objeto para los mensajes")
     ap.add_argument("--modo", help="cascada | and | or | ponderado | solo_color | solo_modelo")
     ap.add_argument("--sin-modelo", action="store_true",
-                    help="Atajo para --modo solo_color (no carga OWLv2)")
+                    help="Atajo para --modo solo_color (no carga ningún modelo)")
+    ap.add_argument("--motor", choices=("yolo_world", "owlv2"),
+                    help="Qué modelo reconoce el objeto (default: el de config.json)")
     ap.add_argument("--salida", default=str(AQUI / "capturas"))
     ap.add_argument("--comparar", action="store_true",
                     help="Corre también el detector original en escala de grises")
@@ -63,6 +65,8 @@ def main() -> int:
         cfg["fusion"]["modo"] = "solo_color"
     elif args.modo:
         cfg["fusion"]["modo"] = args.modo
+    if args.motor:
+        cfg["modelo"]["motor"] = args.motor
     if args.prompts:
         cfg["modelo"]["prompts"] = args.prompts
     if args.nombre:
@@ -107,8 +111,8 @@ def main() -> int:
     usa_modelo = cfg["fusion"]["modo"] != "solo_color"
 
     if usa_modelo and (res_color.hay_cambio or cfg["fusion"]["modo"] != "cascada"):
-        owl = DetectorOWL(cfg["modelo"])
-        print("\n--- 2. OWLv2 ---")
+        owl = crear_motor(cfg["modelo"])
+        print(f"\n--- 2. {owl.motor} ---")
         print("  cargando modelo…")
         owl.cargar()
 
@@ -136,10 +140,10 @@ def main() -> int:
         umbral_modelo = owl.umbral
     else:
         if not usa_modelo:
-            print("\n--- 2. OWLv2 — salteado (modo solo_color) ---")
+            print("\n--- 2. Modelo — salteado (modo solo_color) ---")
         else:
-            print("\n--- 2. OWLv2 — salteado: el color no vio nada (modo cascada) ---")
-        umbral_modelo = float(cfg["modelo"]["confianza_minima"])
+            print("\n--- 2. Modelo — salteado: el color no vio nada (modo cascada) ---")
+        umbral_modelo = float(config_motor(cfg["modelo"])["confianza_minima"])
 
     # ---------------------------------------------------------- [3] fusión
     veredicto = fusion.evaluar(

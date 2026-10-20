@@ -8,10 +8,22 @@
   "roi": {
     "activa": false,
     "puntos": [
-      [0.1, 0.3],
-      [0.9, 0.3],
-      [0.9, 0.95],
-      [0.1, 0.95]
+      [
+        0.1,
+        0.3
+      ],
+      [
+        0.9,
+        0.3
+      ],
+      [
+        0.9,
+        0.95
+      ],
+      [
+        0.1,
+        0.95
+      ]
     ],
     "_comentario": "La alfombra, en coordenadas relativas 0-1. Se dibuja desde la UI."
   },
@@ -35,9 +47,9 @@
     "_papel_nota": "Score 0-1 que mezcla poca saturacion + buen brillo + mucho contraste interno (el texto impreso). Por debajo de papel_minimo, el color no vota que si."
   },
   "modelo": {
-    "_que_es": "Validador 2: OWLv2 confirma que el objeto es un diario.",
-    "id": "google/owlv2-base-patch16-ensemble",
-    "carpeta_local": "modelos",
+    "_que_es": "Validador 2: confirma que el objeto es el que dice el prompt.",
+    "motor": "yolo_world",
+    "_motor_opciones": "yolo_world: rapido (~0.6 s por consulta en una Mac Intel i7 de 2 nucleos) pero con puntajes bajos | owlv2: lento (~9 s a 640, ~1.2 s a 320) pero reconoce mejor. Cada uno tiene su seccion abajo con su propio umbral y resolucion.",
     "device": "auto",
     "_device_opciones": "auto | mps (Apple Silicon) | cuda | cpu",
     "nombre_objeto": "diario",
@@ -46,16 +58,31 @@
       "a newspaper",
       "a folded newspaper"
     ],
+    "_prompts_nota": "En ingles. En espanol no entiende: con OWLv2, 'un lapiz' dio 0.02 contra 0.90 de 'a pencil'.",
     "_prompts_anteojos": [
       "a pair of eyeglasses",
       "glasses",
       "sunglasses"
     ],
-    "resolucion": 640,
-    "_resolucion_nota": "960 nativa (lenta), 768, 640, 480, 320. Medido: 960->conf 0.62 en ~30s | 768->0.46 | 640->0.32 | 480->0.29 | 320->0.45 pero con falsos positivos. Con el recorte que le pasa el validador de color, 640 alcanza.",
-    "confianza_minima": 0.37,
     "mostrar_debiles": false,
-    "_confianza_nota": "Los scores de OWLv2 NO son probabilidades calibradas. Medido en fotos reales: ruido hasta 0.05, diario 0.62 a resolucion 960 y 0.32 a 640. No subas de 0.5 o deja de detectar."
+    "yolo_world": {
+      "pesos": "yolov8s-worldv2.pt",
+      "_pesos_opciones": "yolov8s-worldv2.pt (0.6 s) | yolov8m-worldv2.pt (1.8 s) | yolov8l-worldv2.pt (2.4 s). En las pruebas el S fue el que mejor reconocio el diario real.",
+      "carpeta_local": "modelos_yolo",
+      "resolucion": 640,
+      "_resolucion_nota": "Con la imagen entera o con mas contexto alrededor del objeto reconoce PEOR que con el recorte: el diario real bajo de 0.14 a 0.01.",
+      "confianza_minima": 0.03,
+      "umbral_vista": 0.005,
+      "_confianza_nota": "NO es comparable con el umbral de OWLv2. Puntajes medidos sobre el recorte que arma la app: diario real 0.12, lapiz dibujado 0.042, birome negra 0.004, alfombra vacia 0.0004. 0.03 queda entre lo que es y lo que no. Es EL valor a calibrar con la camara real: activa 'Mostrar detecciones debiles' para ver los puntajes."
+    },
+    "owlv2": {
+      "id": "google/owlv2-base-patch16-ensemble",
+      "carpeta_local": "modelos",
+      "resolucion": 640,
+      "_resolucion_nota": "960 nativa (lenta), 768, 640, 480, 320. Medido sobre el recorte del objeto en una Mac Intel i7 de 2 nucleos: 640 -> 9.4 s (diario 0.95, lapiz 0.90) | 480 -> 3.8 s (0.93, 0.85) | 320 -> 1.2 s (0.81, 0.77).",
+      "confianza_minima": 0.37,
+      "_confianza_nota": "Los scores de OWLv2 NO son probabilidades calibradas. Medido en fotos reales: ruido hasta 0.05, diario 0.62 a resolucion 960 y 0.32 a 640. No subas de 0.5 o deja de detectar."
+    }
   },
   "fusion": {
     "_que_es": "Como se combinan los dos validadores para dar un veredicto unico.",

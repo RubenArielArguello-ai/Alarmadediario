@@ -24,7 +24,7 @@ Corre tres bancos de casos y arma una matriz de confusión:
 
 Uso:
     python harness/run_eval_hibrido.py                # solo color, rápido
-    python harness/run_eval_hibrido.py --con-modelo   # carga OWLv2 (lento)
+    python harness/run_eval_hibrido.py --con-modelo   # carga el modelo de config.json
     python harness/run_eval_hibrido.py --modo and
 """
 
@@ -42,6 +42,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ / "hibrido"))
 
 from fusion import Fusion  # noqa: E402
+from modelo import config_motor, crear_motor  # noqa: E402
 from validador_color import ValidadorColor  # noqa: E402
 
 
@@ -161,7 +162,8 @@ def main() -> int:
     ap.add_argument("--modo", default=None,
                     help="cascada | and | or | ponderado | solo_color | solo_modelo")
     ap.add_argument("--con-modelo", action="store_true",
-                    help="carga OWLv2 (lento). Sin esto corre en modo solo_color.")
+                    help="carga el modelo (YOLO-World u OWLv2, según config.json). "
+                         "Sin esto corre en modo solo_color.")
     ap.add_argument("--pares", default=str(RAIZ / "data" / "pares"))
     ap.add_argument("--reporte", default=str(RAIZ / "harness" / "reporte_hibrido.json"))
     args = ap.parse_args()
@@ -172,10 +174,8 @@ def main() -> int:
 
     owl = None
     if args.con_modelo and modo != "solo_color":
-        from modelo import DetectorOWL
-
-        print("Cargando OWLv2… (puede tardar)")
-        owl = DetectorOWL(cfg["modelo"])
+        owl = crear_motor(cfg["modelo"])
+        print(f"Cargando {owl.motor}… (puede tardar)")
         owl.cargar()
 
     print(f"\nHarness híbrido — modo de fusión: {modo}")
@@ -208,7 +208,7 @@ def main() -> int:
 
         ver = (solo_color if es_hoja else fusion).evaluar(
             rc.score, rc.hay_cambio, rc.papel, conf,
-            color.umbral_papel, float(cfg["modelo"]["confianza_minima"]),
+            color.umbral_papel, float(config_motor(cfg["modelo"])["confianza_minima"]),
         )
 
         if ver.es_diario and esperado:
@@ -244,7 +244,7 @@ def main() -> int:
           f"VP={vp} VN={vn} FP={fp} FN={fn}")
     print(f"precisión {precision:.2f}   recall {recall:.2f}")
     if not args.con_modelo:
-        print("\n(corrió sin OWLv2: agregá --con-modelo para evaluar el pipeline completo)")
+        print("\n(corrió sin modelo: agregá --con-modelo para evaluar el pipeline completo)")
 
     reporte = {
         "modo_fusion": modo, "con_modelo": bool(owl), "total": total,

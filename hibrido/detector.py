@@ -13,7 +13,7 @@ Detector híbrido: une los dos proyectos en un solo pipeline.
          |                                 de cuando estaba vacía?
          |  (si no ve nada, acá se corta y el modelo nunca se despierta)
          v
-    [3] OWLv2 (~1-30 s según resolución)  ¿eso es lo que dice el prompt?
+    [3] modelo: YOLO-World (~0.6 s) u OWLv2 (~4-9 s)   ¿eso es lo que dice el prompt?
          |   <- recibe SOLO el recorte que marcó el color, no el frame entero
          v
     [4] fusión -> veredicto -> confirmaciones -> ALARMA
@@ -35,7 +35,7 @@ import cv2
 import numpy as np
 
 from fusion import Fusion, Modo, Veredicto
-from modelo import DetectorOWL
+from modelo import crear_motor
 from validador_color import ValidadorColor, ResultadoColor
 
 
@@ -85,7 +85,8 @@ class DetectorHibrido:
         self.cfg = config
         cfg_d = config["deteccion"]
 
-        self.owl = DetectorOWL(config["modelo"])
+        # OWLv2 o YOLO-World, según config["modelo"]["motor"]
+        self.motor = crear_motor(config["modelo"])
         self.color = ValidadorColor(config.get("color", {}))
         self.fusion = Fusion(config.get("fusion", {}))
 
@@ -153,19 +154,19 @@ class DetectorHibrido:
     # ------------------------------------------------------------------ atajos
     @property
     def conf_min(self) -> float:
-        return self.owl.umbral
+        return self.motor.umbral
 
     @conf_min.setter
     def conf_min(self, v: float) -> None:
-        self.owl.umbral = float(v)
+        self.motor.umbral = float(v)
 
     @property
     def device(self) -> str:
-        return self.owl.device
+        return self.motor.device
 
     @property
     def nombre(self) -> str:
-        return self.owl.nombre
+        return self.motor.nombre
 
     @property
     def usa_modelo(self) -> bool:
@@ -177,9 +178,9 @@ class DetectorHibrido:
 
     def cargar_modelo(self) -> None:
         if self.usa_modelo:
-            self.owl.cargar()
+            self.motor.cargar()
         else:
-            print("[modelo] modo solo_color: no cargo OWLv2")
+            print("[modelo] modo solo_color: no cargo ningún modelo")
 
     # -------------------------------------------------------------------- ROI
     def set_roi(self, puntos_rel: list, alto: int, ancho: int) -> None:
@@ -317,7 +318,7 @@ class DetectorHibrido:
             bbox_roi = self.bbox_roi
 
         # Preferimos el recorte que marcó el validador de color: el objeto pasa
-        # a ocupar casi todo el cuadro y OWLv2 sube bastante la confianza.
+        # a ocupar casi todo el cuadro y el modelo sube bastante la confianza.
         caja = self.color.bbox_regiones(ultimo_color, self.margen_recorte, alto, ancho)
         if caja is None:
             caja = bbox_roi
@@ -330,7 +331,7 @@ class DetectorHibrido:
         if recorte.size == 0:
             return 0.0, []
 
-        conf, cajas = self.owl.detectar(recorte)
+        conf, cajas = self.motor.detectar(recorte)
         for c in cajas:
             c["x1"] += offset[0]; c["x2"] += offset[0]
             c["y1"] += offset[1]; c["y2"] += offset[1]
@@ -363,7 +364,7 @@ class DetectorHibrido:
             papel=self._ultimo_color.papel,
             conf_modelo=conf,
             umbral_papel=self.color.umbral_papel,
-            umbral_modelo=self.owl.umbral,
+            umbral_modelo=self.motor.umbral,
             nombre=self.nombre,
         )
 

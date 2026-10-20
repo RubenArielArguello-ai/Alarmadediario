@@ -35,6 +35,8 @@ def elegir_device(preferencia: str = "auto") -> str:
 
 
 class DetectorOWL:
+    motor = "OWLv2"
+
     def __init__(self, config_modelo: dict):
         self.id = config_modelo["id"]
         self.carpeta = RAIZ / config_modelo.get("carpeta_local", "modelos")
@@ -193,3 +195,36 @@ class DetectorOWL:
 
         cajas.sort(key=lambda c: c["conf"], reverse=True)
         return mejor, cajas
+
+
+# ---------------------------------------------------------------- motores
+MOTORES = ("yolo_world", "owlv2")
+
+
+def config_motor(config_modelo: dict) -> dict:
+    """La configuración que ve el motor activo.
+
+    config.json guarda lo común (prompts, nombre, device...) en "modelo" y lo
+    propio de cada motor en una sección aparte ("owlv2", "yolo_world"), porque
+    sus umbrales no se pueden comparar: un 0.12 es un buen puntaje para
+    YOLO-World y ruido para OWLv2. Acá se juntan las dos partes.
+    Un config viejo, sin "motor", es plano y es de OWLv2.
+    """
+    motor = config_modelo.get("motor")
+    if not motor:
+        return dict(config_modelo)
+    comun = {k: v for k, v in config_modelo.items() if not isinstance(v, dict)}
+    return {**comun, **config_modelo.get(motor, {})}
+
+
+def crear_motor(config_modelo: dict):
+    """Crea el detector del motor que dice config["modelo"]["motor"]."""
+    motor = config_modelo.get("motor", "owlv2")
+    cfg = config_motor(config_modelo)
+    if motor == "yolo_world":
+        from modelo_yolo import DetectorYoloWorld
+
+        return DetectorYoloWorld(cfg)
+    if motor == "owlv2":
+        return DetectorOWL(cfg)
+    raise ValueError(f"motor desconocido: {motor!r} (opciones: {', '.join(MOTORES)})")

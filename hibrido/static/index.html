@@ -158,7 +158,7 @@
         <div class="val no" id="val-modelo">
           <span class="luz"></span>
           <span class="txt">
-            <span class="tit c2">2 · OWLv2 · ¿es <span id="tit-objeto">el objeto</span>?</span><br>
+            <span class="tit c2">2 · <span id="tit-motor">modelo</span> · ¿es <span id="tit-objeto">el objeto</span>?</span><br>
             <span class="sub" id="sub-modelo">esperando…</span>
           </span>
           <span class="voto" id="voto-modelo">—</span>
@@ -257,9 +257,9 @@ a folded newspaper</textarea>
       </div>
 
       <div class="panel">
-        <h2>Validador 2 · modelo</h2>
+        <h2>Validador 2 · <span id="h2-motor">modelo</span></h2>
         <label>Confianza mínima <span class="valor" id="l-conf">0.37</span></label>
-        <input type="range" id="s-conf" min="0.02" max="0.95" step="0.01" value="0.37">
+        <input type="range" id="s-conf" min="0.01" max="0.95" step="0.01" value="0.37">
         <p class="msg" id="aviso-conf" style="margin:4px 0 0"></p>
         <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
           <input type="checkbox" id="debiles" style="width:auto"> Mostrar detecciones débiles
@@ -507,7 +507,7 @@ async function cambiarFusion() {
   }).then(r => r.json());
   if (!r.ok) { $('msg-fusion').textContent = r.error; return; }
   $('msg-fusion').textContent = EXPLICA[modo] || '';
-  $('modo-actual').textContent = 'modo ' + modo;
+  $('modo-actual').textContent = `modo ${modo} · ${NOMBRE_MOTOR[motorActual] || ''}`;
 }
 
 const EXPLICA = {
@@ -515,8 +515,8 @@ const EXPLICA = {
   and: 'Los dos validadores tienen que coincidir. Igual de estricto que cascada, pero el modelo corre siempre.',
   or: 'Dispara con que uno solo diga que sí. Más sensible y con más falsos positivos.',
   ponderado: 'Promedia los dos scores con los pesos de config.json. Útil si querés que una señal fuerte compense a la otra.',
-  solo_color: 'Apaga OWLv2. Equivale al detect_diario.py original, pero comparando color en vez de gris.',
-  solo_modelo: 'Apaga la validación de color. Solo decide OWLv2.'
+  solo_color: 'Apaga el modelo. Equivale al detect_diario.py original, pero comparando color en vez de gris.',
+  solo_modelo: 'Apaga la validación de color. Solo decide el modelo.'
 };
 
 // ---------------------------------------------------------------- resolución
@@ -598,8 +598,36 @@ $('s-int').addEventListener('input', e => {
   $('l-int').textContent = textoIntervalo(parseInt(e.target.value));
 });
 
-// OWLv2 no devuelve probabilidades calibradas: 0.6 ya es una detección fuerte.
+// Los puntajes de cada motor viven en escalas distintas: un 0.12 es una buena
+// detección para YOLO-World y ruido para OWLv2. Por eso cada uno tiene sus avisos.
+const NOMBRE_MOTOR = {yolo_world: 'YOLO-World', owlv2: 'OWLv2'};
+let motorActual = 'owlv2';
+
 function avisoConfianza() {
+  if (motorActual === 'yolo_world') return avisoConfianzaYolo();
+  avisoConfianzaOwl();
+}
+
+function avisoConfianzaYolo() {
+  const el = $('aviso-conf');
+  if (umbralActual >= 0.20) {
+    el.innerHTML = '<span style="color:var(--warn)">Muy exigente para YOLO-World: ' +
+      'en las pruebas el diario real dio 0.12. Con este umbral no dispararía.</span>';
+  } else if (umbralActual >= 0.10) {
+    el.innerHTML = '<span style="color:var(--warn)">Exigente: está justo en el ' +
+      'puntaje del diario real (0.12).</span>';
+  } else if (umbralActual >= 0.02) {
+    el.innerHTML = '<span style="color:var(--ok)">Zona recomendada para YOLO-World: ' +
+      'entre lo que no es (0.00–0.004) y lo que sí (lápiz 0.04, diario 0.12). ' +
+      'Calibralo con "Mostrar detecciones débiles".</span>';
+  } else {
+    el.innerHTML = '<span style="color:var(--warn)">Muy permisivo: vas a ' +
+      'tener falsos positivos.</span>';
+  }
+}
+
+// OWLv2 no devuelve probabilidades calibradas: 0.6 ya es una detección fuerte.
+function avisoConfianzaOwl() {
   const el = $('aviso-conf');
   if (umbralActual >= 0.65) {
     el.innerHTML = '<span style="color:var(--warn)">Muy exigente. En las fotos ' +
@@ -675,11 +703,16 @@ if ('Notification' in window && Notification.permission === 'default')
   Notification.requestPermission();
 
 fetch('/api/config').then(r => r.json()).then(c => {
-  $('s-conf').value = c.modelo.confianza_minima;
-  $('l-conf').textContent = c.modelo.confianza_minima;
-  umbralActual = c.modelo.confianza_minima;
-  $('debiles').checked = !!c.modelo.mostrar_debiles;
-  if (c.modelo.resolucion) $('res').value = String(c.modelo.resolucion);
+  // Lo común está en c.modelo; umbral y resolución, en la sección del motor.
+  motorActual = c.modelo.motor || 'owlv2';
+  const mc = Object.assign({}, c.modelo, c.modelo[motorActual] || {});
+  $('tit-motor').textContent = NOMBRE_MOTOR[motorActual];
+  $('h2-motor').textContent = NOMBRE_MOTOR[motorActual];
+  $('s-conf').value = mc.confianza_minima;
+  $('l-conf').textContent = mc.confianza_minima;
+  umbralActual = mc.confianza_minima;
+  $('debiles').checked = !!mc.mostrar_debiles;
+  if (mc.resolucion) $('res').value = String(mc.resolucion);
   avisoConfianza();
 
   $('s-mov').value = c.deteccion.umbral_movimiento;
@@ -701,7 +734,7 @@ fetch('/api/config').then(r => r.json()).then(c => {
   const modo = (c.fusion || {}).modo || 'cascada';
   $('fusion').value = modo;
   $('msg-fusion').textContent = EXPLICA[modo] || '';
-  $('modo-actual').textContent = 'modo ' + modo;
+  $('modo-actual').textContent = `modo ${modo} · ${NOMBRE_MOTOR[motorActual]}`;
 
   $('obj-nombre').value  = c.modelo.nombre_objeto || 'diario';
   $('tit-objeto').textContent = c.modelo.nombre_objeto || 'el objeto';
