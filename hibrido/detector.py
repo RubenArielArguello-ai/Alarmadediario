@@ -96,6 +96,12 @@ class DetectorHibrido:
         self.seg_entre_inferencias = float(cfg_d["segundos_entre_inferencias"])
         self.cooldown = float(cfg_d["cooldown_alarma"])
         self.margen_recorte = int(cfg_d.get("margen_recorte", 40))
+        # Una detección del modelo solo cuenta si al menos esta fracción de su
+        # caja cambió respecto de la zona vacía (ver _caja_valida).
+        self.solape_minimo = float(cfg_d.get("solape_minimo", 0.10))
+        # Si cambia más que esta fracción de la zona, no es un objeto: se movió
+        # la hoja o la cámara, o cambió la luz. Se recalibra. 1 = nunca.
+        self.cobertura_maxima = float(config.get("color", {}).get("cobertura_maxima", 0.6))
         # Cada cuántos segundos se mira la zona. 0 = sin pausa, todos los
         # frames (el comportamiento original).
         self.intervalo_chequeo = float(cfg_d.get("intervalo_chequeo", 0))
@@ -316,6 +322,7 @@ class DetectorHibrido:
         with self._lock:
             ultimo_color = self._ultimo_color
             bbox_roi = self.bbox_roi
+            mascara_roi = self.mascara_roi
 
         # Preferimos el recorte que marcó el validador de color: el objeto pasa
         # a ocupar casi todo el cuadro y el modelo sube bastante la confianza.
@@ -331,11 +338,36 @@ class DetectorHibrido:
         if recorte.size == 0:
             return 0.0, []
 
-        conf, cajas = self.motor.detectar(recorte)
+        _, cajas = self.motor.detectar(recorte)
         for c in cajas:
             c["x1"] += offset[0]; c["x2"] += offset[0]
             c["y1"] += offset[1]; c["y2"] += offset[1]
-        return conf, cajas
+
+        # El recorte tiene margen, así que puede incluir cosas que ya estaban:
+        # en una prueba real, la alarma la disparó un control remoto fuera de la
+        # hoja. Solo cuenta lo que está sobre lo que cambió.
+        validas = [c for c in cajas if self._caja_valida(c, ultimo_color, mascara_roi)]
+        conf = max((c["conf"] for c in validas), default=0.0)
+        return conf, validas
+
+    def _caja_valida(self, c: dict, color: ResultadoColor,
+                     mascara_roi: np.ndarray | None) -> bool:
+        """¿Esta detección del modelo es sobre el objeto que apareció?
+
+        Su centro tiene que caer dentro de la zona vigilada, y una parte de su
+        caja tiene que haber cambiado. No se exige más que un poco (10%): un
+        objeto transparente, como el cuerpo de una birome, casi no cambia el
+        color, y el validador solo ve la tapa.
+        """
+        cx, cy = int((c["x1"] + c["x2"]) / 2), int((c["y1"] + c["y2"]) / 2)
+        if mascara_roi is not None:
+            h, w = mascara_roi.shape[:2]
+            if not (0 <= cx < w and 0 <= cy < h) or mascara_roi[cy, cx] == 0:
+                return False
+        if color.mascara is None:
+            # Sin información de color (modo solo_modelo): no hay con qué filtrar.
+            return True
+        return color.solape(c["x1"], c["y1"], c["x2"], c["y2"]) >= self.solape_minimo
 
     def _listo_para_inferir(self, ahora: float) -> bool:
         return (
@@ -516,6 +548,33 @@ class DetectorHibrido:
         # --- [2] validador de color ---
         self._ultimo_color = self.color.analizar(frame)
 
+        # --- [2a] cambió casi toda la zona: no es un objeto, es la escena ---
+        # Se movió la hoja o la cámara, o el iPhone ajustó la exposición. En una
+        # prueba real esto terminó en alarma: el modelo buscó en la hoja entera
+        # y encontró "algo". Se espera a que se quede quieta y se recalibra.
+        if self._ultimo_color.cobertura >= self.cobertura_maxima:
+            if self.quieto_desde is None:
+                self.quieto_desde = ahora
+            estable = ahora - self.quieto_desde
+            if estable < self.seg_estabilidad:
+                self.estado = Estado.ESTABILIZANDO
+                return self._armar(
+                    Estado.ESTABILIZANDO,
+                    f"Cambió el {self._ultimo_color.cobertura:.0%} de la zona: "
+                    f"no parece un objeto. Esperando {estable:.1f}/"
+                    f"{self.seg_estabilidad:.0f}s para recalibrar.",
+                    movimiento,
+                )
+            print(f"[escena] cambió el {self._ultimo_color.cobertura:.0%} de la "
+                  "zona (hoja, cámara o luz): recalibro")
+            self.reiniciar_fondo()
+            return self._armar(
+                Estado.CALIBRANDO,
+                "Cambió toda la zona (se movió la hoja o la cámara, o cambió la "
+                "luz): recalibrando.",
+                movimiento,
+            )
+
         if not self._ultimo_color.hay_cambio:
             self.quieto_desde = None
             self.confirmaciones = 0
@@ -555,9 +614,21 @@ class DetectorHibrido:
         # la primera inferencia negativa y todavía falta confirmarlo.
         if (self.periodico and self.estado == Estado.DESCARTADO
                 and self._inferencias_ciclo == 0):
-            msg = f"Sigue el mismo objeto: no es {self.nombre}."
-            self._cerrar_ciclo(ahora, msg)
-            return self._armar(Estado.DESCARTADO, msg, movimiento)
+            # Dos chequeos seguidos con algo que no es lo buscado y que no se
+            # movió: pasa a ser parte del fondo. Así se absorbe una cámara o
+            # una hoja que se corrió un poco, o algo que alguien dejó ahí. Sin
+            # esto, esos cambios quedan para siempre en la zona, agrandan el
+            # recorte y el modelo deja de ver el objeto cuando sí aparece.
+            # Lo que SÍ es el objeto buscado (DIARIO) nunca se absorbe.
+            print(f"[escena] lo que hay en la zona no es {self.nombre} y no se "
+                  "movió: lo incorporo al fondo")
+            self.reiniciar_fondo()
+            return self._armar(
+                Estado.CALIBRANDO,
+                f"Lo que hay en la zona no es {self.nombre} y no se movió: "
+                "lo incorporo al fondo y recalibro.",
+                movimiento,
+            )
 
         # --- [2b] esperamos a que la escena se quede quieta ---
         if self.quieto_desde is None:

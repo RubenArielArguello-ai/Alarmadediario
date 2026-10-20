@@ -75,6 +75,20 @@ class ResultadoColor:
     papel: float = 0.0          # score de "parece papel" de la región más grande
     regiones: list[Region] = field(default_factory=list)
     motivo: str = ""
+    # Qué píxeles cambiaron (255) y cuáles no (0). Sirve para comprobar que lo
+    # que encuentra el modelo esté sobre lo nuevo y no sobre algo que ya estaba.
+    mascara: np.ndarray | None = field(default=None, repr=False)
+
+    def solape(self, x1: float, y1: float, x2: float, y2: float) -> float:
+        """Fracción de la caja (en coordenadas del frame) que cambió."""
+        if self.mascara is None:
+            return 0.0
+        h, w = self.mascara.shape[:2]
+        x1, y1 = max(0, int(x1)), max(0, int(y1))
+        x2, y2 = min(w, int(x2)), min(h, int(y2))
+        if x2 <= x1 or y2 <= y1:
+            return 0.0
+        return float(np.count_nonzero(self.mascara[y1:y2, x1:x2])) / ((x2 - x1) * (y2 - y1))
 
     @property
     def cajas(self) -> list[dict]:
@@ -263,6 +277,7 @@ class ValidadorColor:
         if not regiones:
             return ResultadoColor(
                 cobertura=cobertura,
+                mascara=mascara,
                 motivo="sin regiones por encima del área mínima",
             )
 
@@ -294,6 +309,7 @@ class ValidadorColor:
             delta_e=principal.delta_e,
             papel=principal.papel,
             regiones=regiones,
+            mascara=mascara,
             motivo=(
                 f"{len(regiones)} región(es), ΔE={principal.delta_e:.1f}, "
                 f"papel={principal.papel:.2f}"

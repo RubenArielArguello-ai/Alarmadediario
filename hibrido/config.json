@@ -44,12 +44,14 @@
     "brillo_minimo": 90.0,
     "contraste_referencia": 45.0,
     "papel_minimo": 0.35,
-    "_papel_nota": "Score 0-1 que mezcla poca saturacion + buen brillo + mucho contraste interno (el texto impreso). Por debajo de papel_minimo, el color no vota que si."
+    "_papel_nota": "Score 0-1 que mezcla poca saturacion + buen brillo + mucho contraste interno (el texto impreso). Por debajo de papel_minimo, el color no vota que si.",
+    "cobertura_maxima": 0.6,
+    "_cobertura_maxima_nota": "Si cambia mas que esta fraccion de la zona no es un objeto: se movio la hoja o la camara, o cambio la luz. Se espera a que quede quieta y se recalibra. En una prueba real una falsa alarma vino de un cambio del 70%. 1 = nunca."
   },
   "modelo": {
     "_que_es": "Validador 2: confirma que el objeto es el que dice el prompt.",
-    "motor": "yolo_world",
-    "_motor_opciones": "yolo_world: rapido (~0.6 s por consulta en una Mac Intel i7 de 2 nucleos) pero con puntajes bajos | owlv2: lento (~9 s a 640, ~1.2 s a 320) pero reconoce mejor. Cada uno tiene su seccion abajo con su propio umbral y resolucion.",
+    "motor": "owlv2",
+    "_motor_opciones": "owlv2: reconoce bien; a 320 tarda ~0.8 s por consulta en una Mac Intel i7 de 2 nucleos | yolo_world: igual de rapido pero en una prueba real confundio anteojos con una birome (0.08 contra 0.04 de la birome real). Cada uno tiene su seccion abajo con su propio umbral y resolucion.",
     "device": "auto",
     "_device_opciones": "auto | mps (Apple Silicon) | cuda | cpu",
     "nombre_objeto": "diario",
@@ -78,10 +80,10 @@
     "owlv2": {
       "id": "google/owlv2-base-patch16-ensemble",
       "carpeta_local": "modelos",
-      "resolucion": 640,
-      "_resolucion_nota": "960 nativa (lenta), 768, 640, 480, 320. Medido sobre el recorte del objeto en una Mac Intel i7 de 2 nucleos: 640 -> 9.4 s (diario 0.95, lapiz 0.90) | 480 -> 3.8 s (0.93, 0.85) | 320 -> 1.2 s (0.81, 0.77).",
-      "confianza_minima": 0.37,
-      "_confianza_nota": "Los scores de OWLv2 NO son probabilidades calibradas. Medido en fotos reales: ruido hasta 0.05, diario 0.62 a resolucion 960 y 0.32 a 640. No subas de 0.5 o deja de detectar."
+      "resolucion": 320,
+      "_resolucion_nota": "960 nativa (lenta), 768, 640, 480, 320. Medido en fotos reales de un escritorio, sobre el recorte que arma el validador de color, con 'a pen' + 'a ballpoint pen': 320 -> 0.8 s, biromes 0.48-0.58, anteojos 0.07 | 480 -> 2.0 s, biromes 0.25-0.27, anteojos 0.14 (peor) | 640 -> 4-7 s, biromes 0.21-0.48, anteojos 0.05. Con la foto ENTERA, 320 daba falsos positivos; con el recorte, es la que mejor anda.",
+      "confianza_minima": 0.25,
+      "_confianza_nota": "Los scores de OWLv2 NO son probabilidades calibradas. A 320, en fotos reales: lo que no es 0.00-0.07 (anteojos, hoja vacia), biromes 0.36-0.58, diario 0.81. 0.25 queda en el medio. Recalibralo si cambias la resolucion."
     }
   },
   "fusion": {
@@ -108,7 +110,9 @@
     "cooldown_alarma": 30.0,
     "_cooldown_desc": "Segundos minimos entre dos alarmas. Igual al intervalo de chequeo para que sacar y volver a poner el objeto dispare de nuevo en el chequeo siguiente",
     "margen_recorte": 40,
-    "_margen_recorte_desc": "Pixeles de contexto alrededor de la region de color que se le pasa al modelo"
+    "_margen_recorte_desc": "Pixeles de contexto alrededor de la region de color que se le pasa al modelo",
+    "solape_minimo": 0.1,
+    "_solape_minimo_desc": "Una deteccion del modelo solo cuenta si su centro esta en la zona y al menos esta fraccion de su caja cambio. Evita que cuente algo que ya estaba (en una prueba real, un control remoto al borde de la hoja)."
   },
   "guardado": {
     "guardar_capturas": true,
