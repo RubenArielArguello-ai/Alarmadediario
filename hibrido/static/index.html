@@ -652,13 +652,13 @@ function avisoConfianzaOwl() {
   const el = $('aviso-conf');
   if (umbralActual >= 0.65) {
     el.innerHTML = '<span style="color:var(--warn)">Muy exigente. En fotos reales ' +
-      'las biromes dieron 0.48–0.58 (a 320): con este umbral no dispararía.</span>';
+      'las biromes dieron 0.48–0.72 (a 320): con este umbral no dispararía.</span>';
   } else if (umbralActual >= 0.45) {
     el.innerHTML = '<span style="color:var(--warn)">Exigente: está justo en el ' +
-      'puntaje de las biromes reales (0.48–0.58 a 320).</span>';
+      'puntaje de las biromes reales (0.48–0.72 a 320).</span>';
   } else if (umbralActual >= 0.20) {
     el.innerHTML = '<span style="color:var(--ok)">Zona recomendada (a 320): entre ' +
-      'lo que no es (anteojos 0.07) y lo que sí (biromes 0.48–0.58).</span>';
+      'lo que no es (0.08 o menos) y lo que sí (biromes 0.48–0.72).</span>';
   } else if (umbralActual < 0.12) {
     el.innerHTML = '<span style="color:var(--warn)">Muy permisivo: vas a ' +
       'tener falsos positivos.</span>';

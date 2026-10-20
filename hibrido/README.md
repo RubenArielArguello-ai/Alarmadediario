@@ -154,16 +154,28 @@ busca se cambia desde la web, en caliente. Se elige el motor con
 **Medido con fotos reales** de un escritorio (cámara del iPhone), sobre el
 recorte que arma el validador de color:
 
-| | birome | birome | anteojos (no) | tiempo |
-|---|---|---|---|---|
-| OWLv2 @ 320, `a pen` + `a ballpoint pen` | **0.58** | **0.48** | **0.07** | 0.8 s |
-| OWLv2 @ 480 | 0.25 | 0.27 | 0.14 | 2.0 s |
-| OWLv2 @ 640 | 0.48 | 0.21 | 0.05 | 4–7 s |
-| YOLO-World S @ 640, `pen` | 0.04 | — | **0.08** | 0.6 s |
+3 biromes (dos sobre la hoja y una sobre la mesa) contra anteojos, control
+remoto, celular, mano y hoja vacía, con `a pen` + `a ballpoint pen`:
 
-- **OWLv2 a 320** separa mejor que a 640 y tarda lo mismo que YOLO-World. Con
-  la foto *entera*, 320 daba falsos positivos; con el recorte, es la que mejor
-  anda. Umbral 0.25.
+| OWLv2 | peor "sí" | peor "no" | separación | tiempo |
+|---|---|---|---|---|
+| 256 | 0.51 | 0.13 | 0.38 | 0.7 s |
+| **320** (default) | **0.48** | **0.08** | **0.40** | 1.1 s |
+| 352 | 0.36 | 0.12 | 0.24 | 1.4 s |
+| 384 | 0.32 | 0.18 | 0.15 | 1.6 s |
+| 640 (medido antes, 2 biromes) | 0.21 | 0.05 | 0.16 | 4–7 s |
+
+YOLO-World S @ 640, `pen`: birome 0.04, anteojos **0.08**.
+
+- **OWLv2 a 320** es la configuración que mejor separa: todo lo que no es
+  birome da 0.08 o menos, las biromes 0.48–0.72. Umbral 0.30, en el medio.
+  Con la foto *entera* 320 daba falsos positivos; con el recorte, es la mejor.
+- **Más de una descripción ayuda**: con `a pen` solo, el peor "sí" baja de
+  0.48 a 0.36.
+- **El margen del recorte**: 40 px es el mejor. Con 20 px se pierde parte de
+  la birome (0.19); con 60 px entra más contexto y empeora un poco.
+- **Hilos de CPU**: uno por núcleo físico. Con 2 hilos tardó 1.10 s, con 4
+  (los lógicos) 1.30 s.
 - **YOLO-World no sirve para esto**: a unos anteojos les dio más puntaje de
   "pen" que a una birome real. Cuando lo equivocado puntúa más alto que lo
   correcto no hay umbral que lo arregle. Queda como opción, pero no se
@@ -325,16 +337,16 @@ Todo está en `config.json`, comentado con claves `_nota`. Los que más importan
   parecer. Diario real: 0.59. Objeto rojo: 0.21.
 - `color.sombra_luz_min` (0.45) — una zona que se oscurece sin cambiar de tono
   cuenta como sombra solo si conserva al menos esta fracción de su luz.
-- `modelo.motor` (`yolo_world`) — qué modelo reconoce el objeto: `yolo_world`
-  u `owlv2`. Lo común a los dos (prompts, nombre, device) está en `modelo`; el
-  umbral y la resolución, en la sección de cada uno.
-- `modelo.yolo_world.confianza_minima` (0.03) — ver la tabla de arriba.
-  Calibralo con la cámara real.
-- `modelo.owlv2.confianza_minima` (0.37) — **los scores de OWLv2 no son
-  probabilidades calibradas**. Ruido hasta 0.05, diario 0.32–0.95 según recorte
-  y resolución. No lo subas de 0.5 o deja de detectar.
+- `modelo.motor` (`owlv2`) — qué modelo reconoce el objeto: `owlv2`,
+  `claude`, `openrouter` o `yolo_world`. Lo común (prompts, nombre, device)
+  está en `modelo`; el umbral y la resolución, en la sección de cada motor.
+- `modelo.owlv2.resolucion` (320) y `modelo.owlv2.confianza_minima` (0.30) —
+  ver el barrido de arriba. **Los scores de OWLv2 no son probabilidades**:
+  si cambiás la resolución, recalibrá el umbral.
+- `modelo.owlv2.hilos` (0) — hilos de CPU; 0 = uno por núcleo físico.
 - `deteccion.confirmaciones_necesarias` (2) — veredictos positivos seguidos
-  antes de disparar.
+  antes de disparar. `deteccion.segundos_entre_inferencias` (1) — pausa entre
+  esas consultas.
 
 ## Estados
 

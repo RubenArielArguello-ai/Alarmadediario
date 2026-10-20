@@ -60,7 +60,7 @@
       "a newspaper",
       "a folded newspaper"
     ],
-    "_prompts_nota": "En ingles. En espanol no entiende: con OWLv2, 'un lapiz' dio 0.02 contra 0.90 de 'a pencil'.",
+    "_prompts_nota": "En ingles. En espanol no entiende: con OWLv2, 'un lapiz' dio 0.02 contra 0.90 de 'a pencil'. Mas de una descripcion ayuda: para una birome, 'a pen' + 'a ballpoint pen' dio 0.48 en el peor caso contra 0.36 de 'a pen' solo.",
     "_prompts_anteojos": [
       "a pair of eyeglasses",
       "glasses",
@@ -81,9 +81,11 @@
       "id": "google/owlv2-base-patch16-ensemble",
       "carpeta_local": "modelos",
       "resolucion": 320,
-      "_resolucion_nota": "960 nativa (lenta), 768, 640, 480, 320. Medido en fotos reales de un escritorio, sobre el recorte que arma el validador de color, con 'a pen' + 'a ballpoint pen': 320 -> 0.8 s, biromes 0.48-0.58, anteojos 0.07 | 480 -> 2.0 s, biromes 0.25-0.27, anteojos 0.14 (peor) | 640 -> 4-7 s, biromes 0.21-0.48, anteojos 0.05. Con la foto ENTERA, 320 daba falsos positivos; con el recorte, es la que mejor anda.",
-      "confianza_minima": 0.25,
-      "_confianza_nota": "Los scores de OWLv2 NO son probabilidades calibradas. A 320, en fotos reales: lo que no es 0.00-0.07 (anteojos, hoja vacia), biromes 0.36-0.58, diario 0.81. 0.25 queda en el medio. Recalibralo si cambias la resolucion."
+      "_resolucion_nota": "Barrido sobre fotos reales de un escritorio (3 biromes; anteojos, control remoto, celular, mano y hoja vacia), con el recorte de la app y 'a pen' + 'a ballpoint pen'. Peor si / peor no / tiempo: 256 -> 0.51 / 0.13 / 0.7 s | 320 -> 0.48 / 0.08 / 1.1 s (la mejor separacion) | 352 -> 0.36 / 0.12 / 1.4 s | 384 -> 0.32 / 0.18 / 1.6 s. Mas resolucion no ayuda con el recorte. Con la foto ENTERA, 320 daba falsos positivos.",
+      "confianza_minima": 0.3,
+      "_confianza_nota": "Los scores de OWLv2 NO son probabilidades. A 320, en fotos reales: todo lo que no es birome 0.00-0.08, biromes 0.48-0.72. 0.30 queda en el medio. Recalibralo si cambias la resolucion.",
+      "hilos": 0,
+      "_hilos_nota": "0 = uno por nucleo fisico. En una Mac Intel de 2 nucleos y 4 hilos logicos: 2 hilos 1.10 s, 4 hilos 1.30 s."
     },
     "claude": {
       "modelo": "claude-opus-5-5",
@@ -131,13 +133,14 @@
     "_segundos_estabilidad_desc": "La escena debe estar quieta este tiempo antes de correr el modelo",
     "confirmaciones_necesarias": 2,
     "_confirmaciones_desc": "Veredictos positivos seguidos antes de disparar la alarma",
-    "segundos_entre_inferencias": 2.0,
+    "segundos_entre_inferencias": 1.0,
     "cooldown_alarma": 30.0,
     "_cooldown_desc": "Segundos minimos entre dos alarmas. Igual al intervalo de chequeo para que sacar y volver a poner el objeto dispare de nuevo en el chequeo siguiente",
     "margen_recorte": 40,
     "_margen_recorte_desc": "Pixeles de contexto alrededor de la region de color que se le pasa al modelo",
     "solape_minimo": 0.1,
-    "_solape_minimo_desc": "Una deteccion del modelo solo cuenta si su centro esta en la zona y al menos esta fraccion de su caja cambio. Evita que cuente algo que ya estaba (en una prueba real, un control remoto al borde de la hoja)."
+    "_solape_minimo_desc": "Una deteccion del modelo solo cuenta si su centro esta en la zona y al menos esta fraccion de su caja cambio. Evita que cuente algo que ya estaba (en una prueba real, un control remoto al borde de la hoja).",
+    "_segundos_entre_inferencias_desc": "Pausa minima entre dos consultas al modelo. Cada consulta de OWLv2 a 320 tarda ~1 s: con 1 s la segunda confirmacion llega enseguida."
   },
   "guardado": {
     "guardar_capturas": true,

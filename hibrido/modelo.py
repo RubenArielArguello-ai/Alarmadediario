@@ -34,6 +34,20 @@ def elegir_device(preferencia: str = "auto") -> str:
     return "cpu"
 
 
+def _nucleos_fisicos() -> int:
+    """Núcleos físicos (no los lógicos del hyperthreading, que en PyTorch
+    no suman y hasta restan)."""
+    try:
+        import psutil
+
+        n = psutil.cpu_count(logical=False)
+        if n:
+            return n
+    except Exception:
+        pass
+    return max(1, (os.cpu_count() or 2) // 2)
+
+
 class DetectorOWL:
     motor = "OWLv2"
 
@@ -52,6 +66,9 @@ class DetectorOWL:
         # (0.62 -> 0.00 sobre las fotos de prueba) sin casi ganar velocidad.
         # Queda desactivada; no la actives salvo que la midas vos mismo.
         self.cuantizar = bool(config_modelo.get("cuantizar_cpu", False))
+        # Hilos de CPU. 0 = uno por núcleo FÍSICO: en una Mac Intel de 2
+        # núcleos y 4 hilos lógicos, 2 hilos tardaron 1.10 s y 4 tardaron 1.30.
+        self.hilos = int(config_modelo.get("hilos", 0))
         # Resolucion de entrada. OWLv2 fue entrenado a 960, pero se puede bajar
         # interpolando los position embeddings. El tiempo escala ~cuadratico.
         self.resolucion = int(config_modelo.get("resolucion", 640))
@@ -93,11 +110,8 @@ class DetectorOWL:
                 self.device = "cpu"
 
         if self.device == "cpu":
-            # Usar todos los nucleos fisicos acelera bastante en Mac Intel.
             try:
-                import os as _os
-
-                nucleos = _os.cpu_count() or 4
+                nucleos = self.hilos or _nucleos_fisicos()
                 torch.set_num_threads(max(1, nucleos))
                 print(f"[modelo] usando {max(1, nucleos)} hilos de CPU")
             except Exception:
