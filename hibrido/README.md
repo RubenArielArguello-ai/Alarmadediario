@@ -230,10 +230,17 @@ Tres reglas que evitan falsas alarmas vistas en la prueba real, con cualquier
 motor:
 
 - **Solo cuenta lo que está sobre lo nuevo.** Una detección del modelo vale
-  si su centro cae dentro de la zona y al menos un 10% de su caja cambió
-  (`deteccion.solape_minimo`). El recorte tiene margen y puede incluir cosas
-  que ya estaban: una falsa alarma vino de un control remoto al borde de la
-  hoja.
+  si su centro cae dentro de la zona y su caja contiene al menos un 15% de
+  todo lo que cambió (`deteccion.solape_minimo`). El recorte tiene margen y
+  puede incluir cosas que ya estaban: una falsa alarma vino de un control
+  remoto al borde de la hoja, que contiene 0% de lo nuevo. (Una primera
+  versión medía "cuánto de la caja cambió" y descartaba biromes reales: el
+  color solo ve la tapa, el 9% de la caja.)
+- **Si lo nuevo es chico, el modelo ve más.** De una birome transparente el
+  color solo detecta la tapa; el recorte se agranda hasta 288 px de lado
+  (`deteccion.recorte_lado_minimo`) para que el modelo vea el objeto entero.
+  Medido con fotos reales y ruido de cámara: birome detectada del 75% al 100%
+  de las veces, anteojos 0% en los dos casos.
 - **Si cambia casi toda la zona, se recalibra.** Más del 60%
   (`color.cobertura_maxima`) no es un objeto: se movió la hoja o la cámara, o
   cambió la luz. Se espera a que quede quieta y se recalibra.
@@ -241,7 +248,10 @@ motor:
   seguidos ven algo que no es lo buscado, y la zona no cambió entre medio, se
   incorpora a la referencia. Así se absorbe una cámara o una hoja que se
   corrió un poco, o algo que alguien dejó. Lo que sí es el objeto buscado
-  nunca se absorbe.
+  nunca se absorbe, y tampoco algo sobre lo que el modelo dudó (alguna
+  consulta llegó a la mitad del umbral): eso se vuelve a verificar. Sin esta
+  salvedad, una birome que el modelo no confirmó a la primera pasaba al fondo
+  y no se detectaba nunca más.
 
 ### Fusión (`fusion.py`)
 

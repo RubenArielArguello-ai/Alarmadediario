@@ -101,9 +101,13 @@ class DetectorHibrido:
         self.seg_entre_inferencias = float(cfg_d["segundos_entre_inferencias"])
         self.cooldown = float(cfg_d["cooldown_alarma"])
         self.margen_recorte = int(cfg_d.get("margen_recorte", 40))
-        # Una detección del modelo solo cuenta si al menos esta fracción de su
-        # caja cambió respecto de la zona vacía (ver _caja_valida).
-        self.solape_minimo = float(cfg_d.get("solape_minimo", 0.10))
+        # Si lo que cambió es chico (ej.: solo la tapa de una birome
+        # transparente), el recorte se agranda alrededor hasta este lado, para
+        # que el modelo vea el objeto entero. Medido: birome detectada 75% -> 100%.
+        self.recorte_lado_minimo = int(cfg_d.get("recorte_lado_minimo", 288))
+        # Una detección del modelo solo cuenta si su caja contiene al menos esta
+        # fracción de todo lo que cambió (ver _caja_valida).
+        self.solape_minimo = float(cfg_d.get("solape_minimo", 0.15))
         # Si cambia más que esta fracción de la zona, no es un objeto: se movió
         # la hoja o la cámara, o cambió la luz. Se recalibra. 1 = nunca.
         self.cobertura_maxima = float(config.get("color", {}).get("cobertura_maxima", 0.6))
@@ -242,6 +246,7 @@ class DetectorHibrido:
         return self.intervalo_chequeo > 0
 
     def _abrir_ciclo(self, ahora: float, gris: np.ndarray) -> None:
+        self._conf_max_ciclo = 0.0
         self._ciclo_desde = ahora
         self._inferencias_ciclo = 0
         self.confirmaciones = 0
@@ -332,6 +337,13 @@ class DetectorHibrido:
         # Preferimos el recorte que marcó el validador de color: el objeto pasa
         # a ocupar casi todo el cuadro y el modelo sube bastante la confianza.
         caja = self.color.bbox_regiones(ultimo_color, self.margen_recorte, alto, ancho)
+        if caja is not None and self.recorte_lado_minimo:
+            x1, y1, x2, y2 = caja
+            cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+            lw = max(x2 - x1, self.recorte_lado_minimo) / 2
+            lh = max(y2 - y1, self.recorte_lado_minimo) / 2
+            caja = (int(max(0, cx - lw)), int(max(0, cy - lh)),
+                    int(min(ancho, cx + lw)), int(min(alto, cy + lh)))
         if caja is None:
             caja = bbox_roi
 
@@ -359,10 +371,13 @@ class DetectorHibrido:
                      mascara_roi: np.ndarray | None) -> bool:
         """¿Esta detección del modelo es sobre el objeto que apareció?
 
-        Su centro tiene que caer dentro de la zona vigilada, y una parte de su
-        caja tiene que haber cambiado. No se exige más que un poco (10%): un
-        objeto transparente, como el cuerpo de una birome, casi no cambia el
-        color, y el validador solo ve la tapa.
+        Su centro tiene que caer dentro de la zona vigilada, y la caja tiene
+        que contener lo nuevo: al menos un 15% de todo lo que cambió. Se mide
+        así, y no como "cuánto de la caja cambió", porque de una birome
+        transparente el color solo ve la tapa: la caja del modelo abarca la
+        birome entera y apenas un 9% de ella cambia, aunque contiene el 100% de
+        lo nuevo. Un objeto que ya estaba (un control remoto al borde del
+        recorte) contiene 0%.
         """
         cx, cy = int((c["x1"] + c["x2"]) / 2), int((c["y1"] + c["y2"]) / 2)
         if mascara_roi is not None:
@@ -372,7 +387,7 @@ class DetectorHibrido:
         if color.mascara is None:
             # Sin información de color (modo solo_modelo): no hay con qué filtrar.
             return True
-        return color.solape(c["x1"], c["y1"], c["x2"], c["y2"]) >= self.solape_minimo
+        return color.cubre(c["x1"], c["y1"], c["x2"], c["y2"]) >= self.solape_minimo
 
     def _listo_para_inferir(self, ahora: float) -> bool:
         return (
@@ -428,6 +443,7 @@ class DetectorHibrido:
                 return
 
             self._inferencias_ciclo += 1
+            self._conf_max_ciclo = max(getattr(self, "_conf_max_ciclo", 0.0), conf)
             if veredicto.es_diario:
                 self.confirmaciones += 1
             else:
@@ -444,6 +460,9 @@ class DetectorHibrido:
             elif self._ultimo_color.hay_cambio and not veredicto.modelo_ok:
                 # Hay un objeto en la zona, pero no es el que buscamos.
                 self.estado = Estado.DESCARTADO
+                # Con una duda razonable (alguna consulta llegó a la mitad del
+                # umbral) no se absorbe al fondo: se vuelve a verificar.
+                self._duda_descartado = self._conf_max_ciclo >= 0.5 * self.motor.umbral
                 if self._inferencias_ciclo >= self.confirmaciones_necesarias:
                     self._cerrar_ciclo(
                         ahora, f"Hay algo en la zona, pero no es {self.nombre}."
@@ -618,7 +637,8 @@ class DetectorHibrido:
         # Solo al arrancar el chequeo: dentro de uno, DESCARTADO aparece tras
         # la primera inferencia negativa y todavía falta confirmarlo.
         if (self.periodico and self.estado == Estado.DESCARTADO
-                and self._inferencias_ciclo == 0):
+                and self._inferencias_ciclo == 0
+                and not getattr(self, "_duda_descartado", False)):
             # Dos chequeos seguidos con algo que no es lo buscado y que no se
             # movió: pasa a ser parte del fondo. Así se absorbe una cámara o
             # una hoja que se corrió un poco, o algo que alguien dejó ahí. Sin

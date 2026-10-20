@@ -138,9 +138,11 @@
     "_cooldown_desc": "Segundos minimos entre dos alarmas. Igual al intervalo de chequeo para que sacar y volver a poner el objeto dispare de nuevo en el chequeo siguiente",
     "margen_recorte": 40,
     "_margen_recorte_desc": "Pixeles de contexto alrededor de la region de color que se le pasa al modelo",
-    "solape_minimo": 0.1,
-    "_solape_minimo_desc": "Una deteccion del modelo solo cuenta si su centro esta en la zona y al menos esta fraccion de su caja cambio. Evita que cuente algo que ya estaba (en una prueba real, un control remoto al borde de la hoja).",
-    "_segundos_entre_inferencias_desc": "Pausa minima entre dos consultas al modelo. Cada consulta de OWLv2 a 320 tarda ~1 s: con 1 s la segunda confirmacion llega enseguida."
+    "solape_minimo": 0.15,
+    "_solape_minimo_desc": "Una deteccion del modelo solo cuenta si su centro esta en la zona y su caja contiene al menos esta fraccion de todo lo que cambio. Evita que cuente algo que ya estaba (en una prueba real, un control remoto al borde de la hoja).",
+    "_segundos_entre_inferencias_desc": "Pausa minima entre dos consultas al modelo. Cada consulta de OWLv2 a 320 tarda ~1 s: con 1 s la segunda confirmacion llega enseguida.",
+    "recorte_lado_minimo": 288,
+    "_recorte_lado_minimo_desc": "Si lo que cambio es chico (la tapa de una birome transparente), el recorte que ve el modelo se agranda hasta este lado. Medido con fotos reales: birome detectada 75% -> 100% de las veces, anteojos 0% -> 0%."
   },
   "guardado": {
     "guardar_capturas": true,
