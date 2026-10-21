@@ -1,6 +1,6 @@
 # Tareas -- Alarmadediario
 
-_Generado automaticamente el 2026-10-21T17:46:18.559Z -- no editar a mano, se sobreescribe en cada publicacion._
+_Generado automaticamente el 2026-10-21T17:54:45.683Z -- no editar a mano, se sobreescribe en cada publicacion._
 
 ## HU-01: Deteccion automatica del diario
 
@@ -14,6 +14,16 @@ Verificar que el sistema detecte el diario mediante la cámara, registre el resu
 - Se registra el resultado de cada caso probado.
 - Se documentan los falsos positivos, falsos negativos y errores encontrados, si los hay.
 - Las pruebas pueden repetirse siguiendo instrucciones documentadas.
+
+### RF-02: Integracion y verificación del detector hibrido (Funcional)
+
+Verificar la integración del detector hibrido incorporado al proyecto, incluyendo la detección por modelo, la configuración del objeto buscado y el funcionamiento del chequeo periódico . registrar errores y resultados de las pruebas.
+
+**Condiciones de aprobación**
+
+.El servidor inicia correctamente 
+.El detector procesa imágenes y muestra el resultado  del chequeo
+.Se documentan los errores encontrados y las pruebas realizadas.
 
 ## RO-01: Captura de imagen mediante camara
 
