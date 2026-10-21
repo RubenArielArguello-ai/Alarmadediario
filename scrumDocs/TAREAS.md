@@ -1,6 +1,6 @@
 # Tareas -- Alarmadediario
 
-_Generado automaticamente el 2026-10-21T18:06:59.626Z -- no editar a mano, se sobreescribe en cada publicacion._
+_Generado automaticamente el 2026-10-21T18:13:38.470Z -- no editar a mano, se sobreescribe en cada publicacion._
 
 ## HU-01: Deteccion automatica del diario
 
@@ -48,6 +48,18 @@ Revisar que el pipeline del repositorio ejecute las verificaciones configuradas 
 .El pipeline se ejecuta ante un cambio o PR
 .Las verificaciones configuradas finalizan correctamente o dejan el error identificado.
 .El resultado queda documentado.
+
+## HU-04: Gestion y documentacion del proyecto
+
+### RF-01: Actualizacion de documentación tecnica y resultados. (Funcional)
+
+Revisar y actualizar el README del repositorio para describir el detector hibrido, los requisitos de instalación, la ejecución, las pruebas realizadas, los resultados obtenidos y las limitaciones conocidas.
+
+**Condiciones de aprobación**
+
+.EL README explica como instalar y ejecutar el proyecto
+.Se documentan los modelos utilizandos y sus requisitos 
+.Se incluyen los resultados de evaluación y sus limitaciones. 
 
 ## RO-01: Captura de imagen mediante camara
 
