@@ -1,6 +1,6 @@
 # Grafo de Dependencias -- Alarmadediario
 
-_Generado automaticamente el 2026-10-21T18:01:18.118Z -- no editar a mano, se sobreescribe en cada publicacion._
+_Generado automaticamente el 2026-10-21T18:07:01.157Z -- no editar a mano, se sobreescribe en cada publicacion._
 
 ```mermaid
 graph TD
@@ -10,6 +10,9 @@ graph TD
   end
   subgraph US_1787080130252["HU-02: Evaluasion automatizada del sistema"]
     REQ_1792605672087["RF-01: Verificacion de resultado del harness hibrido"]
+  end
+  subgraph US_1787084087129["HU-03: Pipeline de integracion continua"]
+    REQ_1792606016657["RF-01: Verificacion del pipeline CI/CD"]
   end
   subgraph US_OP_REQ_1787097664999["RO-01: Captura de imagen mediante camara"]
     REQ_1787097664999["RF-01: Captura de imagen mediante camara"]
