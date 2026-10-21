@@ -1,6 +1,6 @@
 # Plan de Tareas — Alarmadediario
 
-_Generado automáticamente el 2026-10-21T18:01:12.134Z — no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-10-21T18:06:56.696Z — no editar a mano, se sobreescribe en cada publicación._
 
 Orden sugerido de desarrollo (respeta dependencias entre Tareas). Cada fila indica de qué Tareas depende, si tiene.
 
@@ -16,6 +16,7 @@ Orden sugerido de desarrollo (respeta dependencias entre Tareas). Cada fila indi
 | 8 | RF-01 | Validacion de la detección automática del diario | HU-01 | — | — | Hacer | qa-alarmadediario | — | — |
 | 9 | RF-02 | Integracion y verificación del detector hibrido | HU-01 | — | — | Hacer | dev-alarmadediario | — | — |
 | 10 | RF-01 | Verificacion de resultado del harness hibrido | HU-02 | — | — | Hacer | rubenArguello | — | — |
+| 11 | RF-01 | Verificacion del pipeline CI/CD | HU-03 | — | — | Hacer | dev-alarmadediario | — | — |
 
 ## Detalle
 
@@ -47,4 +48,7 @@ Orden sugerido de desarrollo (respeta dependencias entre Tareas). Cada fila indi
 - Estimado: 4h
 
 ### RF-01 — Verificacion de resultado del harness hibrido
+- Estimado: 2h
+
+### RF-01 — Verificacion del pipeline CI/CD
 - Estimado: 2h
