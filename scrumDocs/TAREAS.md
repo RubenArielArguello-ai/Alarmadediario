@@ -1,6 +1,19 @@
 # Tareas -- Alarmadediario
 
-_Generado automaticamente el 2026-10-21T17:34:50.591Z -- no editar a mano, se sobreescribe en cada publicacion._
+_Generado automaticamente el 2026-10-21T17:46:18.559Z -- no editar a mano, se sobreescribe en cada publicacion._
+
+## HU-01: Deteccion automatica del diario
+
+### RF-01: Validacion de la detección automática del diario (Funcional)
+
+Verificar que el sistema detecte el diario mediante la cámara, registre el resultado y permita comprobar su funcionamiento con pruebas reproducibles. Documentar los casos probados y los errores encontrados.
+
+**Condiciones de aprobación**
+
+- El sistema procesa una imagen de prueba y muestra el resultado de la detección.
+- Se registra el resultado de cada caso probado.
+- Se documentan los falsos positivos, falsos negativos y errores encontrados, si los hay.
+- Las pruebas pueden repetirse siguiendo instrucciones documentadas.
 
 ## RO-01: Captura de imagen mediante camara
 
