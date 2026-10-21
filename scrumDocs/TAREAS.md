@@ -1,6 +1,6 @@
 # Tareas -- Alarmadediario
 
-_Generado automaticamente el 2026-10-21T17:54:45.683Z -- no editar a mano, se sobreescribe en cada publicacion._
+_Generado automaticamente el 2026-10-21T18:01:16.416Z -- no editar a mano, se sobreescribe en cada publicacion._
 
 ## HU-01: Deteccion automatica del diario
 
@@ -24,6 +24,18 @@ Verificar la integración del detector hibrido incorporado al proyecto, incluyen
 .El servidor inicia correctamente 
 .El detector procesa imágenes y muestra el resultado  del chequeo
 .Se documentan los errores encontrados y las pruebas realizadas.
+
+## HU-02: Evaluasion automatizada del sistema
+
+### RF-01: Verificacion de resultado del harness hibrido (Funcional)
+
+Revisar la ejecución  del hartes hibrido, comprobar los resultados registrados y documentar los casos exitosos, los errores y las limitaciones de la evaluación.
+
+**Condiciones de aprobación**
+
+.El harness se ejecuta sin errores 
+.Se genera o actualiza el reporte de evaluación
+.Los resultados y los casos de prueba quedan documentados
 
 ## RO-01: Captura de imagen mediante camara
 
