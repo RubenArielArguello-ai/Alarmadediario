@@ -1,6 +1,6 @@
 # Tareas -- Alarmadediario
 
-_Generado automaticamente el 2026-10-21T18:01:16.416Z -- no editar a mano, se sobreescribe en cada publicacion._
+_Generado automaticamente el 2026-10-21T18:06:59.626Z -- no editar a mano, se sobreescribe en cada publicacion._
 
 ## HU-01: Deteccion automatica del diario
 
@@ -36,6 +36,18 @@ Revisar la ejecución  del hartes hibrido, comprobar los resultados registrados 
 .El harness se ejecuta sin errores 
 .Se genera o actualiza el reporte de evaluación
 .Los resultados y los casos de prueba quedan documentados
+
+## HU-03: Pipeline de integracion continua
+
+### RF-01: Verificacion del pipeline CI/CD (Funcional)
+
+Revisar que el pipeline del repositorio ejecute las verificaciones configuradas ante los cambios, registrar el resultado y documentar cualquier fallo.
+
+**Condiciones de aprobación**
+
+.El pipeline se ejecuta ante un cambio o PR
+.Las verificaciones configuradas finalizan correctamente o dejan el error identificado.
+.El resultado queda documentado.
 
 ## RO-01: Captura de imagen mediante camara
 
