@@ -1,9 +1,12 @@
 # Grafo de Dependencias -- Alarmadediario
 
-_Generado automaticamente el 2026-10-21T17:34:52.115Z -- no editar a mano, se sobreescribe en cada publicacion._
+_Generado automaticamente el 2026-10-21T17:46:20.024Z -- no editar a mano, se sobreescribe en cada publicacion._
 
 ```mermaid
 graph TD
+  subgraph US_1787079215619["HU-01: Deteccion automatica del diario"]
+    REQ_1792604775046["RF-01: Validacion de la detección automática del diario"]
+  end
   subgraph US_OP_REQ_1787097664999["RO-01: Captura de imagen mediante camara"]
     REQ_1787097664999["RF-01: Captura de imagen mediante camara"]
   end
