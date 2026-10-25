@@ -1,6 +1,6 @@
 # Historias de Usuario -- Alarmadediario
 
-_Generado automaticamente el 2026-10-21T18:13:36.330Z -- no editar a mano, se sobreescribe en cada publicacion._
+_Generado automaticamente el 2026-10-25T23:55:08.314Z -- no editar a mano, se sobreescribe en cada publicacion._
 
 ## HU-01: Deteccion automatica del diario
 
