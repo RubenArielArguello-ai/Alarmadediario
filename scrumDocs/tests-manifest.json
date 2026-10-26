@@ -1,0 +1,56 @@
+{
+  "tests": [
+    {
+      "requirementCode": "RF-01",
+      "requirementId": "REQ-1792604775046",
+      "testId": "TEST-1792604775088-1",
+      "title": "El sistema procesa una imagen de prueba y muestra el resultado de la detección. — integrado en dev",
+      "type": "Manual",
+      "etapa": "integracion",
+      "criterionIndex": 0,
+      "preconditions": "Repositorio: https://github.com/RubenArielArguello-ai/Alarmadediario\nRama: dev, con el detector híbrido integrado (hoy el código está en main, PR #6)\nEntorno: local (el proyecto no tiene entornos cargados)\nInstalación: pip install -r hibrido/requirements.txt y python hibrido/descargar_modelo.py\nConfiguración: hibrido/config.json sin modificar (motor owlv2, resolución 320, umbral 0.30)\nDependencias: RF-02 \"Integracion y verificación del detector hibrido\" (HU-01) integrado",
+      "description": "🌐 Probar en: local, clon del repositorio en la rama de integración\n📄 Guía con capturas: https://github.com/RubenArielArguello-ai/Alarmadediario/blob/main/docs/pruebas/hu-01-deteccion-automatica-del-diario/RF-01-validacion-deteccion.md\n\nPasos 1 y 2 de la guía.\n1. Correr: python hibrido/cli.py --fondo docs/pruebas/hu-01-deteccion-automatica-del-diario/datos/alfombra_vacia.jpg --actual docs/pruebas/hu-01-deteccion-automatica-del-diario/datos/alfombra_con_diario.jpg\n2. Correr: python hibrido/cli.py --fondo docs/pruebas/hu-01-deteccion-automatica-del-diario/datos/alfombra_vacia.jpg --actual docs/pruebas/hu-01-deteccion-automatica-del-diario/datos/alfombra_con_sombra.jpg\n3. Abrir las dos imágenes marcadas que indica la salida, en hibrido/capturas/.",
+      "expectedResult": "Con diario: la salida termina en \"✅ ALARMA: diario\", con \"modelo dice: DIARIO\" y \"mejor confianza\" mayor a 0.30, y la imagen marcada muestra el diario con un recuadro cian y uno verde.\nCon sombra: la salida termina en \"❌ No hay diario\" (\"el color no ve nada nuevo en la zona\") y la imagen marcada sale sin recuadros.",
+      "steps": []
+    },
+    {
+      "requirementCode": "RF-01",
+      "requirementId": "REQ-1792604775046",
+      "testId": "TEST-1792604775093-3",
+      "title": "Se registra el resultado de cada caso probado. — integrado en dev",
+      "type": "Manual",
+      "etapa": "integracion",
+      "criterionIndex": 1,
+      "preconditions": "Repositorio: https://github.com/RubenArielArguello-ai/Alarmadediario\nRama: dev, con el detector híbrido integrado (hoy el código está en main, PR #6)\nEntorno: local (el proyecto no tiene entornos cargados)\nInstalación: pip install -r hibrido/requirements.txt y python hibrido/descargar_modelo.py\nConfiguración: hibrido/config.json sin modificar (motor owlv2, resolución 320, umbral 0.30)\nDependencias: RF-02 \"Integracion y verificación del detector hibrido\" (HU-01) integrado",
+      "description": "🌐 Probar en: local, clon del repositorio en la rama de integración\n📄 Guía con capturas: https://github.com/RubenArielArguello-ai/Alarmadediario/blob/main/docs/pruebas/hu-01-deteccion-automatica-del-diario/RF-01-validacion-deteccion.md\n\nPaso 3 de la guía.\n1. Correr: python harness/run_eval_hibrido.py\n2. Abrir harness/reporte_hibrido.json y revisar el arreglo \"detalles\".",
+      "expectedResult": "La salida termina en \"aciertos 8/8   VP=3 VN=5 FP=0 FN=0\" y \"precisión 1.00   recall 1.00\". harness/reporte_hibrido.json queda con 8 filas en \"detalles\", una por caso, cada una con \"caso\", \"esperado\", \"obtenido\" y \"resultado\" (OK, FALSO POSITIVO o FALSO NEGATIVO).",
+      "steps": []
+    },
+    {
+      "requirementCode": "RF-01",
+      "requirementId": "REQ-1792604775046",
+      "testId": "TEST-1792604775097-5",
+      "title": "Se documentan los falsos positivos, falsos negativos y errores encontrados, si los hay. — integrado en dev",
+      "type": "Manual",
+      "etapa": "integracion",
+      "criterionIndex": 2,
+      "preconditions": "Repositorio: https://github.com/RubenArielArguello-ai/Alarmadediario\nRama: dev, con el detector híbrido integrado (hoy el código está en main, PR #6)\nEntorno: local (el proyecto no tiene entornos cargados)\nInstalación: pip install -r hibrido/requirements.txt y python hibrido/descargar_modelo.py\nConfiguración: hibrido/config.json sin modificar (motor owlv2, resolución 320, umbral 0.30)\nDependencias: RF-02 \"Integracion y verificación del detector hibrido\" (HU-01) integrado\nInforme: https://github.com/RubenArielArguello-ai/Alarmadediario/blob/main/docs/pruebas/hu-01-deteccion-automatica-del-diario/RF-01-informe-QA.pdf",
+      "description": "🌐 Probar en: local, clon del repositorio en la rama de integración\n📄 Guía con capturas: https://github.com/RubenArielArguello-ai/Alarmadediario/blob/main/docs/pruebas/hu-01-deteccion-automatica-del-diario/RF-01-validacion-deteccion.md\n\nPaso 4 de la guía.\n1. Abrir el informe de QA (RF-01-informe-QA.pdf, en la carpeta de la guía).\n2. Ir a la sección \"4. Hallazgos\" y a la tabla \"1. Mismos casos para los cuatro sistemas\".",
+      "expectedResult": "El informe lista, por sistema probado (OpenCV original, color, híbrido + OWLv2, híbrido + YOLO-World), los falsos positivos y falsos negativos con el caso que los produjo, y los errores encontrados con su corrección. Híbrido + OWLv2: 11/11, 0 falsas alarmas, 0 sin avisar. OpenCV original: 5/11, 6 falsas alarmas.",
+      "steps": []
+    },
+    {
+      "requirementCode": "RF-01",
+      "requirementId": "REQ-1792604775046",
+      "testId": "TEST-1792604775101-7",
+      "title": "Las pruebas pueden repetirse siguiendo instrucciones documentadas. — integrado en dev",
+      "type": "Manual",
+      "etapa": "integracion",
+      "criterionIndex": 3,
+      "preconditions": "Repositorio: https://github.com/RubenArielArguello-ai/Alarmadediario\nRama: dev, con el detector híbrido integrado (hoy el código está en main, PR #6)\nEntorno: local (el proyecto no tiene entornos cargados)\nInstalación: pip install -r hibrido/requirements.txt y python hibrido/descargar_modelo.py\nConfiguración: hibrido/config.json sin modificar (motor owlv2, resolución 320, umbral 0.30)\nDependencias: RF-02 \"Integracion y verificación del detector hibrido\" (HU-01) integrado\nQuién la corre: alguien que no participó de las pruebas, sin ayuda de quien las escribió",
+      "description": "🌐 Probar en: local, clon del repositorio en la rama de integración\n📄 Guía con capturas: https://github.com/RubenArielArguello-ai/Alarmadediario/blob/main/docs/pruebas/hu-01-deteccion-automatica-del-diario/RF-01-validacion-deteccion.md\n\n1. Seguir la guía desde \"Preparación\" hasta el paso 3, solo con lo que dice la guía.\n2. Comparar lo obtenido con lo que la guía dice que tiene que verse en cada paso.",
+      "expectedResult": "Quien sigue la guía obtiene, sin preguntar nada, los mismos resultados que la guía documenta en los pasos 1 a 3: alarma con diario, sin alarma con sombra, y aciertos 8/8 en el harness.",
+      "steps": []
+    }
+  ]
+}
