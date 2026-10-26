@@ -1,6 +1,6 @@
 # Grafo de Dependencias -- Alarmadediario
 
-_Generado automaticamente el 2026-10-26T00:07:06.033Z -- no editar a mano, se sobreescribe en cada publicacion._
+_Generado automaticamente el 2026-10-26T14:36:34.355Z -- no editar a mano, se sobreescribe en cada publicacion._
 
 ```mermaid
 graph TD
