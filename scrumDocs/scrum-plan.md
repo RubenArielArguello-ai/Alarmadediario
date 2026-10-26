@@ -1,6 +1,6 @@
 # Plan de Tareas — Alarmadediario
 
-_Generado automáticamente el 2026-10-26T14:42:58.365Z — no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-10-26T15:43:33.625Z — no editar a mano, se sobreescribe en cada publicación._
 
 Orden sugerido de desarrollo (respeta dependencias entre Tareas). Cada fila indica de qué Tareas depende, si tiene.
 
@@ -14,7 +14,7 @@ Orden sugerido de desarrollo (respeta dependencias entre Tareas). Cada fila indi
 | 6 | RF-01 | Pipeline integracion ciontinua | RO-06 | — | — | Hacer | rubenArguello | — | — |
 | 7 | RF-01 | Documentacion y mantenimiento del proyecto | RO-07 | — | — | Hacer | rubenArguello | — | — |
 | 8 | RF-01 | Validacion de la detección automática del diario | HU-01 | — | — | Hacer | Juan-alarmadediario | — | — |
-| 9 | RF-02 | Integracion y verificación del detector hibrido | HU-01 | — | — | Hacer | Matias-alarmadediario | — | — |
+| 9 | RF-02 | Integracion y verificación del detector hibrido | HU-01 | — | — | Hacer | matias-alarmadediario | — | — |
 | 10 | RF-01 | Verificacion de resultado del harness hibrido | HU-02 | — | — | Hacer | Juan-alarmadediario | — | — |
 | 11 | RF-01 | Verificacion del pipeline CI/CD | HU-03 | — | — | Hacer | Ariel-alarmadediario | — | — |
 | 12 | RF-01 | Actualizacion de documentación tecnica y resultados. | HU-04 | — | — | Hacer | rubenArguello | — | — |
