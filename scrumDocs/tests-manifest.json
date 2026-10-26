@@ -51,6 +51,45 @@
       "description": "🌐 Probar en: local, clon del repositorio en la rama de integración\n📄 Guía con capturas: https://github.com/RubenArielArguello-ai/Alarmadediario/blob/main/docs/pruebas/hu-01-deteccion-automatica-del-diario/RF-01-validacion-deteccion.md\n\n1. Seguir la guía desde \"Preparación\" hasta el paso 3, solo con lo que dice la guía.\n2. Comparar lo obtenido con lo que la guía dice que tiene que verse en cada paso.",
       "expectedResult": "Quien sigue la guía obtiene, sin preguntar nada, los mismos resultados que la guía documenta en los pasos 1 a 3: alarma con diario, sin alarma con sombra, y aciertos 8/8 en el harness.",
       "steps": []
+    },
+    {
+      "requirementCode": "RF-02",
+      "requirementId": "REQ-1792605282525",
+      "testId": "TEST-1792972506432-0",
+      "title": ".El servidor inicia correctamente — integrado en dev",
+      "type": "Manual",
+      "etapa": "integracion",
+      "criterionIndex": 0,
+      "preconditions": "Repositorio: https://github.com/RubenArielArguello-ai/Alarmadediario\nRama: dev, con el detector híbrido integrado (hoy el código está en main, PR #6)\nURL: http://localhost:8000 (local; el proyecto no tiene entornos cargados)\nInstalación: pip install -r hibrido/requirements.txt y python hibrido/descargar_modelo.py\nConfiguración: hibrido/config.json sin modificar\nCámara: conectada a la computadora, fija, con permiso de cámara para la terminal\nDependencias: RF-01 \"Validacion de la detección automática del diario\" (HU-01) con sus Tests de integración en verde",
+      "description": "🌐 Probar en: http://localhost:8000\n📄 Guía con capturas: https://github.com/RubenArielArguello-ai/Alarmadediario/blob/main/docs/pruebas/hu-01-deteccion-automatica-del-diario/RF-02-integracion-detector-hibrido.md\n\nPasos 1 y 2 de la guía.\n1. Correr: python hibrido/server.py (si la cámara no es la primera, agregar --camara 1).\n2. Abrir http://localhost:8000 en un navegador.",
+      "expectedResult": "La terminal muestra, sin errores en el medio: \"Abrí  ->  http://localhost:8000\", \"[modelo] OWLv2 cargado en device=cpu\", \"[modelo] Buscando: a rolled newspaper, a newspaper, a folded newspaper\" y \"[camara] <ancho>x<alto> en índice 0\". El servidor queda corriendo. La página muestra el título \"Alarma de Diario\" y el video en vivo; el texto \"Esperando cámara…\" desaparece.",
+      "steps": []
+    },
+    {
+      "requirementCode": "RF-02",
+      "requirementId": "REQ-1792605282525",
+      "testId": "TEST-1792605282544-3",
+      "title": ".El detector procesa imágenes y muestra el resultado  del chequeo — integrado en dev",
+      "type": "Manual",
+      "etapa": "integracion",
+      "criterionIndex": 1,
+      "preconditions": "Repositorio: https://github.com/RubenArielArguello-ai/Alarmadediario\nRama: dev, con el detector híbrido integrado (hoy el código está en main, PR #6)\nURL: http://localhost:8000 (local; el proyecto no tiene entornos cargados)\nInstalación: pip install -r hibrido/requirements.txt y python hibrido/descargar_modelo.py\nConfiguración: hibrido/config.json sin modificar\nCámara: conectada a la computadora, fija, con permiso de cámara para la terminal\nDependencias: RF-01 \"Validacion de la detección automática del diario\" (HU-01) con sus Tests de integración en verde",
+      "description": "🌐 Probar en: http://localhost:8000\n📄 Guía con capturas: https://github.com/RubenArielArguello-ai/Alarmadediario/blob/main/docs/pruebas/hu-01-deteccion-automatica-del-diario/RF-02-integracion-detector-hibrido.md\n\nPasos 3 a 7 de la guía.\n1. En \"Zona a vigilar\": Dibujar zona, clic en las 4 esquinas, Guardar zona. Dejar la zona vacía unos segundos.\n2. En \"Qué busca el modelo\": Preset diario.\n3. En \"Frecuencia de chequeo\": Chequear cada 10 s, Aplicar.\n4. Apoyar el diario en la zona y retirar la mano.\n5. Silenciar, sacar el diario, esperar un chequeo y apoyar otro objeto (un celular o unos anteojos).",
+      "expectedResult": "Con el diario, en el chequeo siguiente (15 s como máximo): aviso rojo \"Diario detectado — <hora>\" con sonido, estado \"¡diario!\", tarjeta \"2 · OWLv2 · ¿es diario?\" con voto \"SÍ\", recuadro verde sobre el diario; en la terminal \"[ALARMA] diario detectado\"; una imagen diario_<fecha>_<hora>.jpg en hibrido/capturas/ y una fila nueva con estado \"diario\" en hibrido/capturas/detecciones.csv.\nCon el otro objeto: estado \"descartado\", voto \"no\", sin aviso ni sonido.",
+      "steps": []
+    },
+    {
+      "requirementCode": "RF-02",
+      "requirementId": "REQ-1792605282525",
+      "testId": "TEST-1792605282547-5",
+      "title": ".Se documentan los errores encontrados y las pruebas realizadas. — integrado en dev",
+      "type": "Manual",
+      "etapa": "integracion",
+      "criterionIndex": 2,
+      "preconditions": "Repositorio: https://github.com/RubenArielArguello-ai/Alarmadediario\nRama: dev, con el detector híbrido integrado (hoy el código está en main, PR #6)\nURL: http://localhost:8000 (local; el proyecto no tiene entornos cargados)\nInstalación: pip install -r hibrido/requirements.txt y python hibrido/descargar_modelo.py\nConfiguración: hibrido/config.json sin modificar\nCámara: conectada a la computadora, fija, con permiso de cámara para la terminal\nDependencias: RF-01 \"Validacion de la detección automática del diario\" (HU-01) con sus Tests de integración en verde",
+      "description": "🌐 Probar en: http://localhost:8000\n📄 Guía con capturas: https://github.com/RubenArielArguello-ai/Alarmadediario/blob/main/docs/pruebas/hu-01-deteccion-automatica-del-diario/RF-02-integracion-detector-hibrido.md\n\nPaso 8 de la guía.\n1. Abrir el informe de QA (RF-01-informe-QA.pdf), sección \"4. Hallazgos\".\n2. Abrir hibrido/README.md, secciones \"Cuando cambia la escena\" y \"Límite conocido\".\n3. Abrir las guías RF-01-validacion-deteccion.md y RF-02-integracion-detector-hibrido.md.",
+      "expectedResult": "El informe lista los errores encontrados en el QA con su corrección (H1 a H3) y los falsos positivos y negativos por sistema. El README explica cómo instalar y correr el detector y sus límites conocidos. Las dos guías describen las pruebas realizadas con lo que tiene que verse en cada paso.",
+      "steps": []
     }
   ]
 }
