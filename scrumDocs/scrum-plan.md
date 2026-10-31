@@ -1,6 +1,6 @@
 # Plan de Tareas — Alarmadediario
 
-_Generado automáticamente el 2026-10-31T13:07:26.683Z — no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-10-31T13:34:25.921Z — no editar a mano, se sobreescribe en cada publicación._
 
 Orden sugerido de desarrollo (respeta dependencias entre Tareas). Cada fila indica de qué Tareas depende, si tiene.
 
