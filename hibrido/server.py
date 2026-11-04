@@ -8,6 +8,7 @@ Arranca en http://localhost:8000 y:
   - sirve la UI web y transmite video + estado por WebSocket
   - registra cada alarma en capturas/detecciones.csv y, si está activo,
     dispara el webhook de n8n que ya usaba el proyecto original
+  - si está activo, manda la foto de la alarma por Telegram (notificador_telegram.py)
 
 Todo corre en localhost. No necesita internet una vez descargado el modelo.
 
@@ -38,6 +39,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from detector import DetectorHibrido, Estado
+from notificador_telegram import NotificadorTelegram
 
 RAIZ = Path(__file__).parent
 RUTA_CONFIG = RAIZ / "config.json"
@@ -53,6 +55,7 @@ class Aplicacion:
     def __init__(self, config: dict):
         self.cfg = config
         self.detector = DetectorHibrido(config)
+        self.telegram = NotificadorTelegram(config)
         self.camara: cv2.VideoCapture | None = None
         self.ultimo_frame: np.ndarray | None = None
         self.ultimo_resultado = None
@@ -127,6 +130,7 @@ class Aplicacion:
                 ruta = self.guardar_captura(frame, resultado)
                 self.registrar_csv(resultado, ruta)
                 self.avisar_webhook(resultado)
+                self.telegram.avisar(self.detector.nombre, resultado.veredicto, ruta)
                 print(f"\a[ALARMA] {self.detector.nombre} detectado — "
                       f"{resultado.veredicto}")
 
@@ -462,6 +466,7 @@ def main() -> None:
 
     app, _ = crear_app(config)
     print(f"\n  Abrí  ->  http://localhost:{args.puerto}\n")
+    print(f"[telegram] {NotificadorTelegram(config).describir()}")
     uvicorn.run(app, host="127.0.0.1", port=args.puerto, log_level="warning")
 
 
