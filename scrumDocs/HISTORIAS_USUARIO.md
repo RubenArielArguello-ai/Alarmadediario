@@ -1,6 +1,6 @@
 # Historias de Usuario -- Alarmadediario
 
-_Generado automaticamente el 2026-11-04T23:14:27.566Z -- no editar a mano, se sobreescribe en cada publicacion._
+_Generado automaticamente el 2026-11-04T23:35:02.721Z -- no editar a mano, se sobreescribe en cada publicacion._
 
 ## HU-01: Deteccion automatica del diario
 
@@ -62,3 +62,18 @@ Como project Manager quiero mantener organizada y actualizada la documentacion d
 ### Detalle Tecnico y Reglas de Negocio
 
 La documentacion debe mantenerse versionada en git hub. No se debe incluir credenciales token ni informacion sensible. Los cambios relevantes deben registrarse mediante commits.
+
+## HU-05: Documentación de la integración con telegram
+
+Como integrante del equipo Alarmadediario, quiero contar con documentación de la integración entre el modulo de detección  de juan y telegrama, para conocer como funciona, como configurarla y como verificar el envio de reportes
+
+### Criterios de Aceptacion
+
+- Dado que el sistema detecta un evento, cuando se genera el reporte, entonces debe enviarse correctamente al chat de Telegram configurado.
+- Dado que la integración está funcionando, cuando Ari documente el desarrollo, entonces debe indicar los módulos y archivos involucrados.
+- Dado que se necesita configurar o probar Telegram, cuando se consulte el instructivo, entonces deben estar explicados los pasos necesarios sin exponer tokens ni credenciales.
+- Dado que la integración fue probada, cuando Ari complete la documentación, entonces debe adjuntar evidencia del mensaje recibido y el enlace al PR o commit.
+
+### Detalle Tecnico y Reglas de Negocio
+
+La integración de Telegram ya funciona con el desarrollo de detección realizado por Juan. Ari debe documentar el flujo de detección, generación del reporte y envío por Telegram. El instructivo debe guardarse en el repositorio, preferentemente en docs/integracion-telegram.md. No incluir tokens, claves ni credenciales.
