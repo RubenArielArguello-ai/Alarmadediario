@@ -1,6 +1,6 @@
 # Tareas -- Alarmadediario
 
-_Generado automaticamente el 2026-11-04T23:35:04.375Z -- no editar a mano, se sobreescribe en cada publicacion._
+_Generado automaticamente el 2026-11-04T23:40:47.866Z -- no editar a mano, se sobreescribe en cada publicacion._
 
 ## HU-01: Deteccion automatica del diario
 
@@ -60,6 +60,21 @@ Revisar y actualizar el README del repositorio para describir el detector hibrid
 .EL README explica como instalar y ejecutar el proyecto
 .Se documentan los modelos utilizandos y sus requisitos 
 .Se incluyen los resultados de evaluación y sus limitaciones. 
+
+## HU-05: Documentación de la integración con telegram
+
+### RF-01: Documentar y validar la integración de telegram (Funcional)
+
+Ari debe documentar la integración ya funcional entre el módulo de detección desarrollado por Juan y Telegram. El instructivo debe explicar el flujo de detección, generación del reporte y envío del mensaje, además de los pasos para configurar y probar la integración.
+
+**Condiciones de aprobación**
+
+* Se documenta el flujo desde la detección hasta el mensaje recibido en Telegram.
+* Se identifican los módulos o archivos involucrados.
+* Se explican los pasos de configuración y prueba.
+* Se incluye evidencia de una prueba funcional y el enlace al PR o commit.
+* No se publican tokens ni credenciales.
+* El instructivo queda guardado en el repositorio, preferentemente en docs/integracion-telegram.md.
 
 ## RO-01: Captura de imagen mediante camara
 
