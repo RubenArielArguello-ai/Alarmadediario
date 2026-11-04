@@ -153,5 +153,16 @@
     "activo": false,
     "url": "http://localhost:5678/webhook-test/4388a0a2-d83e-4102-ba86-34c5660e8092",
     "_nota": "Mismo webhook n8n que usaba detect_diario.py. Poner activo en true para reactivarlo."
+  },
+  "telegram": {
+    "_que_es": "Aviso por Telegram cuando suena la alarma: manda la foto anotada al chat.",
+    "activo": false,
+    "_activo_nota": "Poner en true despues de completar hibrido/.env (copiar hibrido/.env.example). El token y el chat NO van en este archivo.",
+    "enviar_foto": true,
+    "mensaje": "🚨 {objeto} detectado — {hora}",
+    "_mensaje_nota": "{objeto} = el nombre del objeto buscado, {hora} = dia y hora de la alarma.",
+    "notificador_url": "",
+    "_notificador_nota": "Vacio = habla directo con Telegram. Si se completa (ej. http://localhost:8001/api/notificarTelegram) le manda solo el texto a la API Alarmadediario-notificador, que tiene sus propias credenciales.",
+    "timeout_s": 15
   }
 }

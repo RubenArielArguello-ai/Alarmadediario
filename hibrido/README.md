@@ -376,6 +376,33 @@ Todo está en `config.json`, comentado con claves `_nota`. Los que más importan
 - `hibrido/capturas/detecciones.csv` — una fila por alarma con las dos señales
 - webhook a n8n — desactivado por defecto; se prende en `config.json`
   (`webhook.activo`). Es el mismo endpoint que usaba `detect_diario.py`.
+- aviso por Telegram — desactivado por defecto. Manda la foto anotada de la
+  alarma a un chat o grupo. Ver abajo.
+
+## Aviso por Telegram
+
+1. **Crear el bot.** En Telegram, hablarle a `@BotFather`, mandarle `/newbot` y
+   seguir los pasos. Al final da el token del bot.
+2. **Guardar las credenciales.** Copiar `hibrido/.env.example` a `hibrido/.env` y
+   completar `TELEGRAM_BOT_TOKEN`. `hibrido/.env` no se sube a GitHub: el token
+   nunca va en `config.json`.
+3. **Sacar el chat.** Escribirle algo al bot (o agregarlo al grupo y escribir en
+   el grupo) y correr `python hibrido/notificador_telegram.py --chats`. Copiar el
+   número a `TELEGRAM_CHAT_ID` en `hibrido/.env`.
+4. **Probar.** `python hibrido/notificador_telegram.py --prueba` tiene que dejar
+   un mensaje en el chat.
+5. **Prender.** En `config.json`, `telegram.activo` en `true`, y reiniciar el
+   servidor. Al arrancar muestra `[telegram] activo, al chat ...`.
+
+Cada alarma nueva manda la foto con el texto de `telegram.mensaje`. El envío va
+en un hilo aparte: si Telegram tarda o no responde, el video no se frena, y el
+error queda en la terminal como `[telegram] ...`.
+
+Si en vez de hablar directo con Telegram se quiere usar la API
+`Alarmadediario-notificador` del equipo, completar `telegram.notificador_url`
+(ej. `http://localhost:8001/api/notificarTelegram`). En ese caso se manda solo el
+texto y las credenciales las tiene esa API. Ojo: esa API también usa el puerto
+8000 por defecto, así que hay que levantarla en otro (`--port 8001`).
 
 ## Verificación (rama `fix/hibrido-robustez`)
 
