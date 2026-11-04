@@ -1,6 +1,6 @@
 # Grafo de Dependencias -- Alarmadediario
 
-_Generado automaticamente el 2026-11-04T23:35:06.218Z -- no editar a mano, se sobreescribe en cada publicacion._
+_Generado automaticamente el 2026-11-04T23:40:49.338Z -- no editar a mano, se sobreescribe en cada publicacion._
 
 ```mermaid
 graph TD
@@ -37,5 +37,8 @@ graph TD
   end
   subgraph US_OP_REQ_1787099177559["RO-07: Documentacion y mantenimiento del proyecto"]
     REQ_1787099177559["RF-01: Documentacion y mantenimiento del proyecto"]
+  end
+  subgraph US_1793835292981["HU-05: Documentación de la integración con telegram"]
+    REQ_1793835644828["RF-01: Documentar y validar la integración de telegram"]
   end
 ```
