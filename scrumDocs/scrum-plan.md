@@ -1,6 +1,6 @@
 # Plan de Tareas — Alarmadediario
 
-_Generado automáticamente el 2026-11-04T23:34:53.004Z — no editar a mano, se sobreescribe en cada publicación._
+_Generado automáticamente el 2026-11-04T23:40:44.874Z — no editar a mano, se sobreescribe en cada publicación._
 
 Orden sugerido de desarrollo (respeta dependencias entre Tareas). Cada fila indica de qué Tareas depende, si tiene.
 
@@ -18,6 +18,7 @@ Orden sugerido de desarrollo (respeta dependencias entre Tareas). Cada fila indi
 | 10 | RF-01 | Verificacion de resultado del harness hibrido | HU-02 | — | — | Hacer | Juan-alarmadediario | — | — |
 | 11 | RF-01 | Verificacion del pipeline CI/CD | HU-03 | — | — | Hacer | Ariel-alarmadediario | — | — |
 | 12 | RF-01 | Actualizacion de documentación tecnica y resultados. | HU-04 | — | — | Hacer | rubenArguello | — | — |
+| 13 | RF-01 | Documentar y validar la integración de telegram | HU-05 | — | — | Hacer | Ariel-alarmadediario | — | — |
 
 ## Detalle
 
@@ -56,3 +57,6 @@ Orden sugerido de desarrollo (respeta dependencias entre Tareas). Cada fila indi
 
 ### RF-01 — Actualizacion de documentación tecnica y resultados.
 - Estimado: 2h
+
+### RF-01 — Documentar y validar la integración de telegram
+- Estimado: 4h
