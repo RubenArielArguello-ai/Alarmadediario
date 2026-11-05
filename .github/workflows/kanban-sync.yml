@@ -43,7 +43,7 @@ jobs:
       - name: Notify Scrum Master AI
         if: steps.event.outputs.type != 'skip'
         run: |
-          curl -sf -X POST "https://scrum.misitiowebpersonal.com.ar/api/webhooks/github" \
+          curl -sf -X POST "https://scrum.nuestrocamino.cloud/api/webhooks/github" \
             -H "X-Scrum-Secret: ${{ secrets.SCRUM_ACTIONS_SECRET }}" \
             -H "Content-Type: application/json" \
             -d '{
