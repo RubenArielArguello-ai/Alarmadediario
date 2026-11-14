@@ -1,0 +1,333 @@
+{
+  "name": "Webhook a Telegram - enviar-telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "enviar-telegram",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "154182b3-fa4d-4cdf-bc47-55b8a72ab2a0",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        96
+      ],
+      "webhookId": "0be2bafc-084a-47bf-924e-901e1fe76221"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.mensaje }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "32b3b387-db93-4b5b-8aa4-0ae30f7a899b",
+      "name": "Validar mensaje",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.imagen }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "21fcc427-211b-43c0-bf16-9fc9631cf2b0",
+      "name": "Tiene imagen",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "imagen-b64",
+              "name": "imagen_b64",
+              "type": "string",
+              "value": "={{ String($json.body.imagen).replace(/^data:[^;]+;base64,/, \"\").replace(/\\s/g, \"\") }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "16c79647-3fd3-48ee-91c0-fcb1a558c791",
+      "name": "Limpiar base64",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        720,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "toBinary",
+        "sourceProperty": "imagen_b64",
+        "options": {}
+      },
+      "id": "1603a365-0429-499f-9dcf-ede5c85c5cd2",
+      "name": "Convertir imagen",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        944,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "-1003791996499",
+        "binaryData": true,
+        "additionalFields": {
+          "caption": "={{ $('Webhook').item.json.body.mensaje }}",
+          "fileName": "imagen.jpg",
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "8bd785ee-c5e9-44ab-970f-f9a0920ac499",
+      "name": "Enviar foto a Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1168,
+        416
+      ],
+      "webhookId": "414b05b8-51fe-4a14-9ee2-d9bea762d7d9",
+      "credentials": {
+        "telegramApi": {
+          "id": "iMaloawgoJxGXo3n",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"status\": \"ok\", \"detalle\": \"Mensaje enviado a Telegram\" }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "0a8510dd-e1eb-4fc5-a31d-58cf1fb22470",
+      "name": "Respuesta OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "-1003791996499",
+        "text": "={{ $json.body.mensaje }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "05909265-4727-4f1c-9bcd-c1f68751f9ad",
+      "name": "Enviar a Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        976,
+        0
+      ],
+      "webhookId": "91062219-562b-4aed-8b14-486cffddf6f2",
+      "credentials": {
+        "telegramApi": {
+          "id": "iMaloawgoJxGXo3n",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"status\": \"error\", \"detalle\": \"Falta el campo 'mensaje' en el body\" }",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "bd62968e-09d6-4110-a967-716349b69dce",
+      "name": "Respuesta Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        448,
+        192
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar mensaje": {
+      "main": [
+        [
+          {
+            "node": "Tiene imagen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tiene imagen": {
+      "main": [
+        [
+          {
+            "node": "Limpiar base64",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar a Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limpiar base64": {
+      "main": [
+        [
+          {
+            "node": "Convertir imagen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convertir imagen": {
+      "main": [
+        [
+          {
+            "node": "Enviar foto a Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar foto a Telegram": {
+      "main": [
+        [
+          {
+            "node": "Respuesta OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar a Telegram": {
+      "main": [
+        [
+          {
+            "node": "Respuesta OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "7dc7169a-1562-4297-97cc-086106586a4a",
+  "meta": {
+    "instanceId": "dadef4a5a6ffd8ed8da18443beba97b9f0f632c01b2aab5e37a94e16befc9848"
+  },
+  "nodeGroups": [
+    {
+      "id": "dc29053d-9ae4-465b-a698-4978a1350a58",
+      "name": "Enviar imagen adjunta",
+      "nodeIds": [
+        "16c79647-3fd3-48ee-91c0-fcb1a558c791",
+        "1603a365-0429-499f-9dcf-ede5c85c5cd2",
+        "8bd785ee-c5e9-44ab-970f-f9a0920ac499"
+      ],
+      "description": "Cuando el body trae una imagen en base64, la decodifica y la publica en el grupo con el mensaje como pie de foto"
+    }
+  ],
+  "id": "cjg9h0MwH6yPi6sf",
+  "tags": []
+}
