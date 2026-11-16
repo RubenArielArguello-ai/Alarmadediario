@@ -4,376 +4,200 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AlarmaDeDiario — El diario ya llegó</title>
+<meta name="description" content="Sistema de visión artificial que detecta cuándo el diario llega a la puerta y avisa al instante. Proyecto de equipo de la Diplomatura en Inteligencia Artificial.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,900;1,600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;900&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper: #EAE6DA;
-    --paper-dim: #E1DCCC;
-    --ink: #1B1A17;
-    --ink-soft: #4A453D;
-    --caption: #726B5E;
-    --rule: #C9C2AE;
-    --stamp-red: #A6192E;
-    --stamp-green: #2F5233;
-    --card: #F4F1E7;
+    --paper:#EAE6DA;
+    --ink:#1B1A17;
+    --ink-soft:#4A453D;
+    --caption:#6B6459;
+    --rule:#C9C2AE;
+    --red:#A6192E;
+    --green:#2F5233;
+    --card:#F4F1E7;
   }
-
-  *{ box-sizing:border-box; margin:0; padding:0; }
-
-  html{ scroll-behavior:smooth; }
-
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
   body{
-    background:
-      radial-gradient(1200px 600px at 10% -10%, rgba(0,0,0,0.03), transparent),
-      var(--paper);
-    color: var(--ink);
-    font-family: 'Source Serif 4', Georgia, serif;
-    line-height:1.55;
-    -webkit-font-smoothing:antialiased;
+    background:var(--paper);color:var(--ink);
+    font-family:'Source Serif 4',Georgia,serif;
+    line-height:1.55;-webkit-font-smoothing:antialiased;
   }
+  .wrap{max-width:1040px;margin:0 auto;padding:0 24px}
+  a{color:inherit}
+  :focus-visible{outline:2px solid var(--red);outline-offset:3px}
 
-  /* subtle paper grain via noise-ish gradient */
-  body::before{
-    content:"";
-    position:fixed; inset:0;
-    pointer-events:none;
-    background-image:
-      repeating-linear-gradient(0deg, rgba(0,0,0,0.015) 0px, rgba(0,0,0,0.015) 1px, transparent 1px, transparent 3px);
-    z-index:0;
-  }
-
-  .wrap{ max-width:1040px; margin:0 auto; padding:0 24px; position:relative; z-index:1; }
-
-  a{ color:inherit; }
-
-  .eyebrow{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:12px;
-    letter-spacing:0.14em;
-    text-transform:uppercase;
-    color:var(--caption);
-  }
-
-  /* ---------- MASTHEAD ---------- */
-  .masthead{
-    padding:28px 0 18px;
-    border-bottom:3px solid var(--ink);
-    text-align:center;
-  }
-  .masthead .dateline{
-    display:flex; justify-content:space-between; align-items:center;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:11px;
-    letter-spacing:0.08em;
-    text-transform:uppercase;
-    color:var(--caption);
-    padding-bottom:14px;
-    border-bottom:1px solid var(--rule);
-    margin-bottom:16px;
+  /* masthead */
+  .masthead{padding:28px 0 18px;border-bottom:3px solid var(--ink);text-align:center}
+  .dateline{
+    display:flex;justify-content:space-between;gap:12px;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--caption);
+    padding-bottom:14px;border-bottom:1px solid var(--rule);margin-bottom:16px;
   }
   .masthead h1{
-    font-family:'Playfair Display', serif;
-    font-weight:900;
-    font-size:clamp(40px, 8vw, 76px);
-    letter-spacing:-0.01em;
-    line-height:0.95;
+    font-family:'Playfair Display',Georgia,serif;font-weight:900;
+    font-size:clamp(40px,8vw,76px);line-height:.95;letter-spacing:-.01em;
   }
-  .masthead .subhead{
-    font-family:'Source Serif 4', serif;
-    font-style:italic;
-    font-size:16px;
-    color:var(--ink-soft);
-    margin-top:10px;
-  }
+  .subhead{font-style:italic;font-size:16px;color:var(--ink-soft);margin-top:10px}
 
-  /* ---------- HERO ---------- */
+  /* hero */
   .hero{
-    padding:56px 0 40px;
-    display:grid;
-    grid-template-columns: 1.15fr 0.85fr;
-    gap:48px;
-    align-items:center;
-    border-bottom:1px solid var(--rule);
+    padding:56px 0 48px;display:grid;grid-template-columns:1.15fr .85fr;
+    gap:48px;align-items:center;border-bottom:1px solid var(--rule);
   }
-  .hero .kicker{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:12px;
-    letter-spacing:0.14em;
-    text-transform:uppercase;
-    color:var(--stamp-red);
-    margin-bottom:14px;
-    display:inline-block;
+  .kicker{
+    display:inline-block;margin-bottom:14px;color:var(--red);
+    font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;
   }
   .hero h2{
-    font-family:'Playfair Display', serif;
-    font-weight:700;
-    font-size:clamp(30px, 4.4vw, 48px);
-    line-height:1.08;
-    margin-bottom:20px;
+    font-family:'Playfair Display',Georgia,serif;font-weight:700;
+    font-size:clamp(30px,4.4vw,48px);line-height:1.08;margin-bottom:20px;
   }
-  .hero p.lede{
-    font-size:18px;
-    color:var(--ink-soft);
-    max-width:46ch;
-    margin-bottom:28px;
-  }
-  .cta-row{ display:flex; gap:14px; flex-wrap:wrap; }
+  .lede{font-size:18px;color:var(--ink-soft);max-width:46ch;margin-bottom:28px}
+  .cta-row{display:flex;gap:14px;flex-wrap:wrap}
   .btn{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:13px;
-    letter-spacing:0.04em;
-    text-decoration:none;
-    padding:13px 22px;
-    border:1.5px solid var(--ink);
-    display:inline-block;
-    transition:transform .15s ease, background .15s ease, color .15s ease;
+    font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:.04em;
+    text-decoration:none;padding:13px 22px;border:1.5px solid var(--ink);display:inline-block;
+    transition:transform .15s ease,background .15s ease,color .15s ease;
   }
-  .btn.primary{ background:var(--ink); color:var(--paper); }
-  .btn.primary:hover{ transform:translateY(-2px); }
-  .btn.ghost:hover{ background:var(--ink); color:var(--paper); transform:translateY(-2px); }
+  .btn.primary{background:var(--ink);color:var(--paper)}
+  .btn:hover{transform:translateY(-2px)}
+  .btn.ghost:hover{background:var(--ink);color:var(--paper)}
 
-  /* signature stamp illustration */
-  .stamp-art{
-    position:relative;
-    aspect-ratio:1/1;
-    max-width:340px;
-    margin:0 auto;
-  }
-  .stamp-art svg{ width:100%; height:100%; display:block; }
+  .stamp-art{position:relative;max-width:340px;margin:0 auto;width:100%}
+  .stamp-art svg{width:100%;height:auto;display:block}
   .stamp-badge{
-    position:absolute;
-    top:8%; right:2%;
-    font-family:'IBM Plex Mono', monospace;
-    font-weight:600;
-    font-size:13px;
-    letter-spacing:0.06em;
-    color:var(--stamp-red);
-    border:2.5px solid var(--stamp-red);
-    border-radius:50%;
-    width:112px; height:112px;
-    display:flex; align-items:center; justify-content:center;
-    text-align:center;
-    transform:rotate(-14deg);
-    text-transform:uppercase;
-    line-height:1.25;
-    opacity:0.9;
-    animation: stampIn 0.6s cubic-bezier(.2,1.4,.4,1) 0.3s both;
+    position:absolute;top:6%;right:0;width:112px;height:112px;border-radius:50%;
+    border:2.5px solid var(--red);color:var(--red);
+    display:flex;align-items:center;justify-content:center;text-align:center;
+    font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:13px;
+    letter-spacing:.06em;text-transform:uppercase;line-height:1.25;
+    transform:rotate(-14deg);opacity:.92;
+    animation:stampIn .6s cubic-bezier(.2,1.4,.4,1) .3s both;
   }
   @keyframes stampIn{
-    0%{ transform:rotate(-14deg) scale(2.2); opacity:0; }
-    100%{ transform:rotate(-14deg) scale(1); opacity:0.9; }
+    from{transform:rotate(-14deg) scale(2.2);opacity:0}
+    to{transform:rotate(-14deg) scale(1);opacity:.92}
   }
-  @media (prefers-reduced-motion: reduce){
-    .stamp-badge{ animation:none; }
-  }
+  @media (prefers-reduced-motion:reduce){.stamp-badge{animation:none}}
 
-  /* ---------- SECTION HEADERS ---------- */
-  .section{ padding:56px 0; border-bottom:1px solid var(--rule); }
-  .section:last-of-type{ border-bottom:none; }
-  .section-head{
-    display:flex; align-items:baseline; gap:16px; margin-bottom:32px;
-  }
-  .section-head .num{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:13px;
-    color:var(--stamp-red);
-  }
-  .section-head h3{
-    font-family:'Playfair Display', serif;
-    font-weight:700;
-    font-size:clamp(24px,3vw,32px);
-  }
-  .section-head .rule{
-    flex:1; height:1px; background:var(--rule);
-  }
+  /* sections */
+  .section{padding:56px 0;border-bottom:1px solid var(--rule)}
+  .section-head{display:flex;align-items:baseline;gap:16px;margin-bottom:32px}
+  .section-head .num{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--red)}
+  .section-head h3{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:clamp(24px,3vw,32px)}
+  .section-head .rule{flex:1;height:1px;background:var(--rule)}
+  .intro{font-size:17px;color:var(--ink-soft);max-width:62ch;margin-bottom:28px}
 
-  /* ---------- PIPELINE ---------- */
-  .pipeline{
-    display:grid;
-    grid-template-columns:repeat(4,1fr);
-    gap:0;
-    counter-reset: step;
-  }
-  .step{
-    padding:0 20px 0 0;
-    position:relative;
-  }
+  /* problema */
+  .problems{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .problem{background:var(--card);border:1px solid var(--rule);padding:22px}
+  .problem h4{font-family:'Playfair Display',Georgia,serif;font-size:19px;margin-bottom:8px}
+  .problem p{font-size:15px;color:var(--ink-soft)}
+
+  /* pipeline */
+  .pipeline{display:grid;grid-template-columns:repeat(4,1fr);gap:0}
+  .step{padding-right:22px;position:relative}
   .step:not(:last-child)::after{
-    content:"→";
-    position:absolute;
-    right:-4px; top:6px;
-    font-family:'IBM Plex Mono', monospace;
-    color:var(--caption);
-    font-size:18px;
+    content:"→";position:absolute;right:-2px;top:6px;
+    font-family:'IBM Plex Mono',monospace;font-size:18px;color:var(--caption);
   }
-  .step .step-num{
-    font-family:'Playfair Display', serif;
-    font-weight:900;
-    font-size:34px;
-    color:var(--stamp-red);
-    line-height:1;
-    margin-bottom:10px;
-  }
-  .step h4{
-    font-family:'Source Serif 4', serif;
-    font-weight:600;
-    font-size:16px;
-    margin-bottom:8px;
-  }
-  .step p{
-    font-size:14px;
-    color:var(--ink-soft);
-  }
+  .step-num{font-family:'Playfair Display',Georgia,serif;font-weight:900;font-size:34px;color:var(--red);line-height:1;margin-bottom:10px}
+  .step h4{font-weight:600;font-size:16px;margin-bottom:8px}
+  .step p{font-size:14px;color:var(--ink-soft)}
 
-  /* ---------- FEATURES (news columns) ---------- */
-  .columns{
-    columns:2;
-    column-gap:40px;
-  }
-  .col-item{
-    break-inside:avoid;
-    margin-bottom:26px;
-    padding-bottom:26px;
-    border-bottom:1px solid var(--rule);
-  }
-  .col-item:last-child{ border-bottom:none; }
-  .col-item h4{
-    font-family:'Playfair Display', serif;
-    font-weight:700;
-    font-size:19px;
-    margin-bottom:6px;
-  }
-  .col-item p{
-    font-size:15px;
-    color:var(--ink-soft);
-  }
+  /* features */
+  .columns{columns:2;column-gap:40px}
+  .col-item{break-inside:avoid;margin-bottom:26px;padding-bottom:26px;border-bottom:1px solid var(--rule)}
+  .col-item h4{font-family:'Playfair Display',Georgia,serif;font-size:19px;margin-bottom:6px}
+  .col-item p{font-size:15px;color:var(--ink-soft)}
   .tag{
-    display:inline-block;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:10px;
-    letter-spacing:0.08em;
-    text-transform:uppercase;
-    color:var(--stamp-green);
-    border:1px solid var(--stamp-green);
-    padding:2px 8px;
-    margin-bottom:8px;
+    display:inline-block;margin-bottom:8px;padding:2px 8px;
+    font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--green);border:1px solid var(--green);
+  }
+  .tag.wip{color:var(--red);border-color:var(--red)}
+
+  /* stack */
+  .stack-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+  .chip{background:var(--card);border:1px solid var(--rule);padding:16px 14px;text-align:center}
+  .chip .name{font-weight:600;font-size:15px}
+  .chip .role{
+    margin-top:4px;font-family:'IBM Plex Mono',monospace;font-size:10px;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--caption);
   }
 
-  /* ---------- STACK ---------- */
-  .stack-grid{
-    display:grid;
-    grid-template-columns:repeat(auto-fit, minmax(140px,1fr));
-    gap:14px;
-  }
-  .stack-chip{
-    background:var(--card);
-    border:1px solid var(--rule);
-    padding:16px 14px;
-    text-align:center;
-  }
-  .stack-chip .name{
-    font-family:'Source Serif 4', serif;
-    font-weight:600;
-    font-size:15px;
-  }
-  .stack-chip .role{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:10px;
-    letter-spacing:0.06em;
-    text-transform:uppercase;
-    color:var(--caption);
-    margin-top:4px;
-  }
+  /* equipo */
+  .team{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px}
+  .member{background:var(--card);border:1px solid var(--rule);padding:18px}
+  .member h4{font-size:16px;margin-bottom:4px}
+  .member .role{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--red);margin-bottom:8px}
+  .member p{font-size:14px;color:var(--ink-soft)}
 
-  /* ---------- FOOTER ---------- */
-  footer{
-    padding:44px 0 60px;
-    text-align:center;
-  }
+  footer{padding:44px 0 60px;text-align:center}
   footer .fine{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:11px;
-    letter-spacing:0.08em;
-    text-transform:uppercase;
-    color:var(--caption);
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--caption);
   }
-  footer .fine a{ text-decoration:underline; }
-  footer p.credit{
-    margin-top:10px;
-    font-style:italic;
-    color:var(--ink-soft);
-    font-size:14px;
-  }
+  footer .credit{margin-top:10px;font-style:italic;color:var(--ink-soft);font-size:14px}
 
-  /* ---------- RESPONSIVE ---------- */
-  @media (max-width: 760px){
-    .hero{ grid-template-columns:1fr; gap:32px; }
-    .hero .stamp-art{ order:-1; max-width:220px; }
-    .pipeline{ grid-template-columns:1fr 1fr; row-gap:28px; }
-    .step:nth-child(2)::after{ display:none; }
-    .step:not(:last-child)::after{ display:none; }
-    .columns{ columns:1; }
-    .masthead .dateline{ flex-direction:column; gap:4px; text-align:center; }
-  }
-
-  :focus-visible{
-    outline:2px solid var(--stamp-red);
-    outline-offset:3px;
+  @media (max-width:760px){
+    .hero{grid-template-columns:1fr;gap:32px}
+    .stamp-art{order:-1;max-width:220px}
+    .problems{grid-template-columns:1fr}
+    .pipeline{grid-template-columns:1fr 1fr;row-gap:28px}
+    .step::after{display:none!important}
+    .columns{columns:1}
+    .dateline{flex-direction:column;text-align:center;gap:4px}
   }
 </style>
 </head>
 <body>
-
 <div class="wrap">
 
-  <!-- MASTHEAD -->
   <header class="masthead">
     <div class="dateline">
       <span>Diplomatura en Inteligencia Artificial</span>
-      <span>Edición N.º 1 — Proyecto de Equipo</span>
-      <span>Visión Artificial · Python</span>
+      <span>Proyecto de equipo</span>
+      <span>Visión artificial · Python</span>
     </div>
     <h1>ALARMA DE DIARIO</h1>
-    <p class="subhead">"El diario llegó." — dicho por una cámara, no por tu vecino.</p>
+    <p class="subhead">“El diario llegó”, dicho por una cámara y no por tu vecino.</p>
   </header>
 
-  <!-- HERO -->
   <section class="hero">
     <div>
       <span class="kicker">Última edición · Detección en tiempo real</span>
       <h2>Un sistema que sabe cuándo el diario está en tu puerta, antes que vos.</h2>
-      <p class="lede">AlarmaDeDiario usa visión artificial para detectar cuándo el diario es depositado en la puerta de tu casa, y te avisa al instante — sin que tengas que salir a mirar cada cinco minutos.</p>
+      <p class="lede">AlarmaDeDiario usa visión artificial para detectar cuándo el diario es dejado en la puerta de tu casa y te avisa al instante, sin que tengas que salir a mirar cada cinco minutos.</p>
       <div class="cta-row">
         <a class="btn primary" href="https://github.com/RubenArielArguello-ai/Alarmadediario" target="_blank" rel="noopener">Ver repositorio</a>
         <a class="btn ghost" href="#como-funciona">Cómo funciona</a>
       </div>
     </div>
     <div class="stamp-art">
-      <svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Ilustración de una puerta con un diario y una cámara de detección">
-        <!-- door -->
+      <svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Ilustración de una puerta con un diario en el suelo y una cámara que lo detecta">
         <rect x="70" y="40" width="140" height="230" fill="none" stroke="#1B1A17" stroke-width="2.5"/>
         <circle cx="190" cy="155" r="4" fill="#1B1A17"/>
-        <!-- door panel lines -->
         <rect x="88" y="60" width="104" height="80" fill="none" stroke="#1B1A17" stroke-width="1.4"/>
         <rect x="88" y="155" width="104" height="80" fill="none" stroke="#1B1A17" stroke-width="1.4"/>
-        <!-- newspaper -->
         <g transform="translate(95,225) rotate(-8)">
-          <rect x="0" y="0" width="70" height="46" fill="#F4F1E7" stroke="#1B1A17" stroke-width="2"/>
+          <rect width="70" height="46" fill="#F4F1E7" stroke="#1B1A17" stroke-width="2"/>
           <line x1="8" y1="10" x2="62" y2="10" stroke="#1B1A17" stroke-width="2"/>
           <line x1="8" y1="18" x2="50" y2="18" stroke="#4A453D" stroke-width="1.2"/>
           <line x1="8" y1="24" x2="55" y2="24" stroke="#4A453D" stroke-width="1.2"/>
           <line x1="8" y1="30" x2="45" y2="30" stroke="#4A453D" stroke-width="1.2"/>
           <line x1="8" y1="36" x2="58" y2="36" stroke="#4A453D" stroke-width="1.2"/>
         </g>
-        <!-- camera -->
         <g transform="translate(215,60)">
-          <rect x="0" y="0" width="34" height="22" rx="3" fill="#1B1A17"/>
+          <rect width="34" height="22" rx="3" fill="#1B1A17"/>
           <circle cx="8" cy="11" r="6" fill="#EAE6DA"/>
           <circle cx="8" cy="11" r="2.4" fill="#1B1A17"/>
           <rect x="30" y="6" width="10" height="10" fill="#1B1A17"/>
-          <!-- detection cone -->
           <path d="M -2 11 L -70 165 L 30 165 Z" fill="#A6192E" opacity="0.08"/>
           <path d="M -2 11 L -70 165 M -2 11 L 30 165" stroke="#A6192E" stroke-width="1" stroke-dasharray="4 4" opacity="0.5"/>
         </g>
@@ -382,92 +206,67 @@
     </div>
   </section>
 
-  <!-- COMO FUNCIONA -->
+  <section class="section" id="problema">
+    <div class="section-head"><span class="num">01</span><h3>El problema</h3><span class="rule"></span></div>
+    <p class="intro">Nadie quiere estar pendiente de la puerta toda la mañana. Pero si nadie mira, el diario puede quedar tirado horas antes de que alguien lo retire.</p>
+    <div class="problems">
+      <div class="problem"><h4>Tiempo perdido</h4><p>Revisar la puerta “a ojo” varias veces al día solo para ver si ya llegó.</p></div>
+      <div class="problem"><h4>Sin registro</h4><p>No hay forma de saber a qué hora llegó realmente ni de comprobarlo con una imagen.</p></div>
+      <div class="problem"><h4>Exposición</h4><p>Lluvia, viento o robo si el diario se queda afuera demasiado tiempo.</p></div>
+    </div>
+  </section>
+
   <section class="section" id="como-funciona">
-    <div class="section-head">
-      <span class="num">01</span>
-      <h3>Cómo funciona</h3>
-      <span class="rule"></span>
-    </div>
+    <div class="section-head"><span class="num">02</span><h3>Cómo funciona</h3><span class="rule"></span></div>
     <div class="pipeline">
-      <div class="step">
-        <div class="step-num">01</div>
-        <h4>Captura</h4>
-        <p>La cámara fotografía la zona de la puerta a intervalos regulares.</p>
-      </div>
-      <div class="step">
-        <div class="step-num">02</div>
-        <h4>Procesamiento</h4>
-        <p>NumPy y OpenCV analizan la imagen buscando la forma del diario.</p>
-      </div>
-      <div class="step">
-        <div class="step-num">03</div>
-        <h4>Clasificación</h4>
-        <p>El sistema decide: ¿hay diario en la escena o no?</p>
-      </div>
-      <div class="step">
-        <div class="step-num">04</div>
-        <h4>Alarma</h4>
-        <p>Si se detecta, se dispara la notificación y se guarda la evidencia.</p>
-      </div>
+      <div class="step"><div class="step-num">01</div><h4>Captura</h4><p>Una cámara toma imágenes de la zona de la puerta de forma continua.</p></div>
+      <div class="step"><div class="step-num">02</div><h4>Detección</h4><p>OpenCV, NumPy y YOLO analizan la imagen y buscan un diario en la escena.</p></div>
+      <div class="step"><div class="step-num">03</div><h4>Validación</h4><p>El sistema confirma el resultado para evitar falsas alarmas antes de avisar.</p></div>
+      <div class="step"><div class="step-num">04</div><h4>Aviso</h4><p>Se envía una notificación y se guarda la imagen como evidencia.</p></div>
     </div>
   </section>
 
-  <!-- FUNCIONALIDADES -->
-  <section class="section">
-    <div class="section-head">
-      <span class="num">02</span>
-      <h3>Funcionalidades destacadas</h3>
-      <span class="rule"></span>
-    </div>
+  <section class="section" id="funcionalidades">
+    <div class="section-head"><span class="num">03</span><h3>Qué incluye</h3><span class="rule"></span></div>
     <div class="columns">
-      <div class="col-item">
-        <span class="tag">Detección</span>
-        <h4>Reconocimiento visual del diario</h4>
-        <p>Combina OpenCV y NumPy para diferenciar el diario del fondo, sin importar la posición exacta en la puerta.</p>
-      </div>
-      <div class="col-item">
-        <span class="tag">Evidencia</span>
-        <h4>Registro fotográfico automático</h4>
-        <p>Cada detección guarda una imagen marcada, como prueba de que el sistema funcionó correctamente.</p>
-      </div>
-      <div class="col-item">
-        <span class="tag">Testing</span>
-        <h4>Harness de evaluación automática</h4>
-        <p>Un conjunto de imágenes de prueba permite medir la precisión del detector antes de cada entrega.</p>
-      </div>
-      <div class="col-item">
-        <span class="tag">Calidad</span>
-        <h4>Integración continua</h4>
-        <p>GitHub Actions ejecuta tests y linting automáticamente ante cada cambio en el repositorio.</p>
-      </div>
+      <div class="col-item"><span class="tag">Detección</span><h4>Reconocimiento visual del diario</h4><p>Combina técnicas de visión clásica con detección en tiempo real mediante YOLO, sin depender de que el diario esté siempre en la misma posición.</p></div>
+      <div class="col-item"><span class="tag">Evidencia</span><h4>Imagen marcada de cada detección</h4><p>Cada detección guarda una imagen con el diario señalado, como prueba de que el sistema funcionó.</p></div>
+      <div class="col-item"><span class="tag">Calidad</span><h4>Test harness automatizado</h4><p>Un arnés de pruebas corre el detector sobre imágenes conocidas y mide cuántas veces acierta, para registrar falsos positivos y falsos negativos.</p></div>
+      <div class="col-item"><span class="tag">Calidad</span><h4>Integración continua</h4><p>GitHub Actions ejecuta las comprobaciones automáticamente ante cada cambio propuesto en el repositorio.</p></div>
+      <div class="col-item"><span class="tag wip">En desarrollo</span><h4>Notificaciones por Telegram</h4><p>Un flujo en n8n conecta el sistema con Telegram para enviar el aviso como mensaje de texto y como imagen.</p></div>
     </div>
   </section>
 
-  <!-- STACK -->
-  <section class="section">
-    <div class="section-head">
-      <span class="num">03</span>
-      <h3>Stack tecnológico</h3>
-      <span class="rule"></span>
-    </div>
+  <section class="section" id="tecnologias">
+    <div class="section-head"><span class="num">04</span><h3>Tecnologías</h3><span class="rule"></span></div>
     <div class="stack-grid">
-      <div class="stack-chip"><div class="name">Python 3.x</div><div class="role">Lenguaje</div></div>
-      <div class="stack-chip"><div class="name">OpenCV</div><div class="role">Visión artificial</div></div>
-      <div class="stack-chip"><div class="name">NumPy</div><div class="role">Procesamiento numérico</div></div>
-      <div class="stack-chip"><div class="name">pytest</div><div class="role">Testing</div></div>
-      <div class="stack-chip"><div class="name">flake8</div><div class="role">Linting</div></div>
-      <div class="stack-chip"><div class="name">GitHub Actions</div><div class="role">CI/CD</div></div>
+      <div class="chip"><div class="name">Python</div><div class="role">Lenguaje</div></div>
+      <div class="chip"><div class="name">OpenCV</div><div class="role">Visión artificial</div></div>
+      <div class="chip"><div class="name">NumPy</div><div class="role">Cálculo con imágenes</div></div>
+      <div class="chip"><div class="name">YOLO</div><div class="role">Detección de objetos</div></div>
+      <div class="chip"><div class="name">n8n</div><div class="role">Automatización</div></div>
+      <div class="chip"><div class="name">Telegram</div><div class="role">Notificaciones</div></div>
+      <div class="chip"><div class="name">GitHub Actions</div><div class="role">Integración continua</div></div>
     </div>
   </section>
 
-  <!-- FOOTER -->
+  <section class="section" id="equipo">
+    <div class="section-head"><span class="num">05</span><h3>El equipo</h3><span class="rule"></span></div>
+    <div class="team">
+      <div class="member"><h4>Ruben Ariel Arguello</h4><div class="role">Product Owner y Scrum Master</div><p>Coordinación, arnés de pruebas y documentación del alcance.</p></div>
+      <div class="member"><h4>Ariel Gastón Diaz</h4><div class="role">Integraciones</div><p>Notificaciones con n8n y Telegram.</p></div>
+      <div class="member"><h4>Juan Meneguzzi</h4><div class="role">Calidad</div><p>Pruebas de detección y casos de prueba.</p></div>
+      <div class="member"><h4>Sole Galindez</h4><div class="role">Landing y documentación</div><p>Página de presentación del proyecto.</p></div>
+      <div class="member"><h4>Mati</h4><div class="role">Pipeline</div><p>Arnés, pipeline e integración de componentes.</p></div>
+    </div>
+  </section>
+
   <footer>
-    <p class="fine">Proyecto de equipo — Diplomatura en Inteligencia Artificial · <a href="https://github.com/RubenArielArguello-ai/Alarmadediario" target="_blank" rel="noopener">github.com/RubenArielArguello-ai/Alarmadediario</a></p>
-    <p class="credit">"No fue el cartero. Fue la visión artificial."</p>
+    <p class="fine">Proyecto de equipo · Diplomatura en Inteligencia Artificial ·
+      <a href="https://github.com/RubenArielArguello-ai/Alarmadediario" target="_blank" rel="noopener">Ver código en GitHub</a></p>
+    <p class="credit">“No fue el cartero. Fue la visión artificial.”</p>
   </footer>
 
 </div>
-
 </body>
 </html>
