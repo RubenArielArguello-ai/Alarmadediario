@@ -66,7 +66,7 @@
   },
   "modelo": {
     "_que_es": "Validador 2: confirma que el objeto es el que dice el prompt.",
-    "motor": "owlv2",
+    "motor": "claude",
     "_motor_opciones": "owlv2 (default): local y sin costo; a 320 tarda ~0.8 s por consulta en una Mac Intel i7 de 2 nucleos | claude: verifica con la API de Anthropic; entiende espanol y distingue objetos parecidos; necesita ANTHROPIC_API_KEY y cada consulta cuesta | openrouter: lo mismo pero via OpenRouter, que con una clave da acceso a Claude, Gemini, GPT y otros; necesita OPENROUTER_API_KEY | yolo_world: local y rapido, pero en una prueba real confundio anteojos con una birome. Cada uno tiene su seccion abajo.",
     "device": "auto",
     "_device_opciones": "auto | mps (Apple Silicon) | cuda | cpu",

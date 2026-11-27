@@ -1,31 +1,19 @@
-# Alarma de Diario - versión híbrida (color + OWLv2)
+# Alarma de Diario - versión híbrida (color + Claude)
 # Instalar con:  pip install -r hibrido/requirements.txt
 #
-# El proyecto original (detect_diario.py) solo necesita opencv, numpy y
-# requests. Todo lo pesado de acá abajo es exclusivo del validador 2.
+# El validador 2 es Claude (motor "claude" en config.json): no hace falta
+# torch ni modelos locales. Los motores locales (owlv2, yolo_world) se
+# dejaron de usar porque reconocían mal el diario; si alguna vez se
+# quieren probar, instalar aparte torch, transformers y ultralytics.
 
-# IMPORTANTE (Mac Intel): PyTorch dejó de publicar builds para macOS x86
-# después de la 2.2.2, y esa versión necesita transformers de la rama 4.x.
-# Por eso los topes de versión. En Apple Silicon o Linux podés sacarlos.
-torch>=2.2.0,<2.3.0
-torchvision>=0.17.0,<0.18.0
-transformers>=4.40.0,<5.0.0
-
-scipy>=1.10.0             # lo usa el image processor de OWLv2 para el resize
-pillow>=10.0.0
-opencv-python>=4.9.0,<5   # captura de cámara y visión clásica (ultralytics no soporta la 5)
-numpy>=1.24.0,<2.0.0      # torch 2.2 no soporta numpy 2.x
+opencv-python-headless>=4.9.0,<5   # cámara, visión clásica y recortes (sin pantalla)
+numpy>=1.24.0,<2.0.0
 
 fastapi>=0.110.0          # servidor local
 uvicorn[standard]>=0.29.0 # ASGI server + websockets
-requests>=2.31.0          # webhook a n8n (igual que el proyecto original)
+requests>=2.31.0          # n8n, Telegram y OpenRouter
 blinkpy>=0.25.0           # cámara Blink como fuente (camara_blink.py); pide Python 3.10+
 
-# YOLO-World (motor por defecto). CLIP codifica los prompts de texto; se instala
-# desde el fork de Ultralytics, que es el que espera su código.
-ultralytics==8.4.182
-clip @ git+https://github.com/ultralytics/CLIP.git
-
-# Motor "claude" (opcional): verifica el objeto con la API de Anthropic.
-# Necesita ANTHROPIC_API_KEY en el entorno del servidor.
+# Motor "claude": verifica el objeto con la API de Anthropic.
+# Necesita ANTHROPIC_API_KEY en hibrido/.env (o en el entorno del servidor).
 anthropic>=1.15.0
