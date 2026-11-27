@@ -15,6 +15,7 @@ Uso:
     python server.py
     python server.py --camara 1 --puerto 8080
     python server.py --modo solo_color      # sin modelo, como el proyecto viejo
+    python server.py --modo-prueba          # servidor web sin modelo ni cámara
     python server.py --motor claude         # verifica con Claude (necesita ANTHROPIC_API_KEY)
     python server.py --motor openrouter     # verifica vía OpenRouter (necesita OPENROUTER_API_KEY)
 """
@@ -50,7 +51,7 @@ COLUMNAS_CSV = [
 
 
 class Aplicacion:
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, crear_carpeta_capturas: bool = True):
         self.cfg = config
         self.detector = DetectorHibrido(config)
         self.camara: cv2.VideoCapture | None = None
@@ -60,7 +61,8 @@ class Aplicacion:
         self.corriendo = False
         self.tarea_inferencia: asyncio.Task | None = None
         self.carpeta_capturas = RAIZ / config["guardado"]["carpeta"]
-        self.carpeta_capturas.mkdir(exist_ok=True)
+        if crear_carpeta_capturas:
+            self.carpeta_capturas.mkdir(exist_ok=True)
 
     # ------------------------------------------------------------- cámara
     def abrir_camara(self) -> None:
@@ -273,8 +275,8 @@ def anotar(img: np.ndarray, cajas: list) -> np.ndarray:
 
 
 # ------------------------------------------------------------------ FastAPI
-def crear_app(config: dict) -> tuple[FastAPI, Aplicacion]:
-    estado = Aplicacion(config)
+def crear_app(config: dict, modo_prueba: bool = False) -> tuple[FastAPI, Aplicacion]:
+    estado = Aplicacion(config, crear_carpeta_capturas=not modo_prueba)
     app = FastAPI(title="Alarma de Diario — híbrido")
 
     def guardar_config() -> None:
@@ -287,6 +289,9 @@ def crear_app(config: dict) -> tuple[FastAPI, Aplicacion]:
 
     @app.on_event("startup")
     async def arrancar():
+        if modo_prueba:
+            print("[prueba] modo de prueba: no cargo modelos ni abro la cámara")
+            return
         estado.detector.cargar_modelo()
         estado.abrir_camara()
         asyncio.create_task(estado.bucle())
@@ -444,8 +449,12 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--camara", type=int, help="índice de cámara (0, 1, 2…)")
     ap.add_argument("--puerto", type=int, default=8000)
+    ap.add_argument("--host", default="127.0.0.1",
+                    help="interfaz de escucha (default: 127.0.0.1)")
     ap.add_argument("--device", help="mps | cuda | cpu")
     ap.add_argument("--modo", help="cascada | and | or | ponderado | solo_color | solo_modelo")
+    ap.add_argument("--modo-prueba", action="store_true",
+                    help="sirve FastAPI sin cargar modelos, abrir la cámara ni capturar")
     ap.add_argument("--motor", choices=("owlv2", "yolo_world", "claude", "openrouter"),
                     help="qué modelo reconoce el objeto (default: el de config.json)")
     args = ap.parse_args()
@@ -460,9 +469,9 @@ def main() -> None:
     if args.motor:
         config["modelo"]["motor"] = args.motor
 
-    app, _ = crear_app(config)
+    app, _ = crear_app(config, modo_prueba=args.modo_prueba)
     print(f"\n  Abrí  ->  http://localhost:{args.puerto}\n")
-    uvicorn.run(app, host="127.0.0.1", port=args.puerto, log_level="warning")
+    uvicorn.run(app, host=args.host, port=args.puerto, log_level="warning")
 
 
 if __name__ == "__main__":

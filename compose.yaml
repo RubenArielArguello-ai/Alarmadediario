@@ -1,0 +1,26 @@
+services:
+  hibrido:
+    image: alarmadediario-hibrido
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "server.py", "--host", "0.0.0.0"]
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8000}:8000"
+    restart: unless-stopped
+    volumes:
+      - ./hibrido/config.json:/app/hibrido/config.json
+      - ./hibrido/capturas:/app/hibrido/capturas
+      - owlv2-modelos:/app/hibrido/modelos
+      - yolo-modelos:/app/hibrido/modelos_yolo
+
+  hibrido-prueba:
+    image: alarmadediario-hibrido
+    profiles: ["prueba"]
+    command: ["python", "server.py", "--modo-prueba", "--host", "0.0.0.0"]
+    volumes:
+      - ./hibrido/config.json:/app/hibrido/config.json:ro
+
+volumes:
+  owlv2-modelos:
+  yolo-modelos:

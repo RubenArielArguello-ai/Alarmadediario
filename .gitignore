@@ -218,3 +218,38 @@ __marimo__/
 .streamlit/secrets.toml
 .DS_Store
 harness/run_eval.py.bak
+
+# Local Python environments, including named backup environments
+.venv*/
+**/.venv*/
+venv*/
+**/venv*/
+__pycache__/
+**/__pycache__/
+
+# Local model weights and generated output
+**/modelos/
+**/modelos_yolo/
+**/weights/
+**/capturas/
+*.pt
+*.pth
+*.safetensors
+*.onnx
+*.engine
+
+# Local secrets and credential files
+.env*
+**/.env*
+.envrc
+**/.envrc
+.secrets/
+**/.secrets/
+secrets/
+**/secrets/
+credentials/
+**/credentials/
+*.pem
+*.p12
+*.pfx
+*.key
