@@ -76,6 +76,28 @@ class Aplicacion:
             self.carpeta_capturas.mkdir(exist_ok=True)
 
     # ------------------------------------------------------------- cámara
+    async def iniciar_camara(self, reintento_s: float = 300) -> None:
+        """Abre la cámara y arranca la vigilancia. Si la cámara no responde
+        (Blink desconectada, sin internet), la web sigue andando y se reintenta
+        cada `reintento_s`: sin esto el servidor se caía y Docker lo reiniciaba
+        en loop, entrando a la cuenta de Blink una y otra vez."""
+        avisado = False
+        while True:
+            try:
+                await asyncio.to_thread(self.abrir_camara)
+                break
+            except Exception as e:
+                print(f"[camara] no pude abrirla: {e}. Reintento en {reintento_s:.0f} s")
+                if not avisado:
+                    self.telegram.avisar_texto(
+                        f"⚠️ La alarma no puede usar la cámara: {e}. "
+                        f"Reintenta cada {reintento_s / 60:.0f} min.")
+                    avisado = True
+                await asyncio.sleep(reintento_s)
+        if avisado:
+            self.telegram.avisar_texto("✅ La cámara volvió a responder: la alarma está vigilando.")
+        await self.bucle()
+
     def abrir_camara(self) -> None:
         self.camara, frame = self.abrir_fuente(self.cfg["camara"])
         alto, ancho = frame.shape[:2]
@@ -440,8 +462,7 @@ def crear_app(config: dict, modo_prueba: bool = False) -> tuple[FastAPI, Aplicac
             print("[prueba] modo de prueba: no cargo modelos ni abro la cámara")
             return
         estado.detector.cargar_modelo()
-        estado.abrir_camara()
-        asyncio.create_task(estado.bucle())
+        asyncio.create_task(estado.iniciar_camara())
 
     @app.on_event("shutdown")
     async def apagar():
