@@ -448,3 +448,168 @@ heredada del proyecto original. Es barata y alcanza para lo que hace, pero no ve
 un objeto que tenga la misma luminancia que la alfombra aunque sea de otro
 color. No es un problema en la práctica porque la etapa 2 sí lo ve —
 simplemente ese frame no se marca como "movimiento".
+
+## Docker
+
+La imagen instala `hibrido/requirements.txt` sobre Python 3.11.15 y copia el
+código y la interfaz web. `.dockerignore` excluye `config.json`, archivos de
+entorno y credenciales, entornos virtuales, pesos, capturas e imágenes locales;
+no se copian esos datos a la imagen. Compose monta el `config.json` existente
+del host para que la aplicación pueda leerlo. El servicio de prueba lo monta
+como solo lectura, para que una prueba web no pueda sobrescribirlo. El servicio
+normal lo monta con escritura para conservar los ajustes cambiados desde la UI.
+
+Los pesos permanecen fuera de la imagen, en volúmenes persistentes que coinciden
+con las rutas `hibrido/modelos` (OWLv2) y `hibrido/modelos_yolo` (YOLO-World)
+del código. Las capturas y el CSV se guardan en `hibrido/capturas` en el host.
+
+Desde la raíz del repositorio:
+
+```bash
+docker compose build hibrido
+```
+
+La imagen local resultante se llama `alarmadediario-hibrido:latest`. El
+repositorio no define un registro ni un flujo CI de publicación. Para publicarla,
+primero autenticá Docker mediante el mecanismo aprobado por el equipo y usá el
+nombre real del registro y namespace:
+
+```bash
+docker image tag alarmadediario-hibrido:latest "${REGISTRY}/${NAMESPACE}/alarmadediario-hibrido:${TAG}"
+docker image push "${REGISTRY}/${NAMESPACE}/alarmadediario-hibrido:${TAG}"
+```
+
+No guardes credenciales del registro en el repositorio ni en la imagen. No se
+ejecutó `docker push`.
+
+### Prueba web, sin cámara ni carga de modelos
+
+Este modo sirve FastAPI, pero no carga pesos, no abre la cámara ni inicia la
+captura. Ejecutalo y mantené esa terminal abierta:
+
+```bash
+docker compose run --rm --publish 127.0.0.1:8000:8000 hibrido-prueba
+```
+
+En otra terminal, verificá la página HTTP:
+
+```bash
+curl -fsS http://127.0.0.1:8000/
+```
+
+Abrí <http://127.0.0.1:8000/> en el navegador. Para detener la prueba, usá
+`Ctrl+C` en la terminal donde corre `docker compose run`; el contenedor se
+elimina automáticamente. La configuración está montada como solo lectura y
+este servicio no monta rutas de capturas ni de pesos.
+
+### Ejecución real
+
+La ejecución normal carga el modelo y luego abre la cámara. No la inicies hasta
+tener un modelo disponible y un dispositivo de cámara accesible desde el
+contenedor:
+
+```bash
+docker compose up hibrido
+```
+
+La UI se publica solo en la máquina local, en <http://127.0.0.1:8000/>. Para
+detener y retirar el contenedor:
+
+```bash
+docker compose down
+```
+
+Los volúmenes de pesos no se eliminan con `docker compose down`. Si los pesos
+locales no están disponibles, el motor OWLv2 puede intentar descargarlos al
+iniciar. Para descargarlos deliberadamente al volumen correspondiente:
+
+```bash
+docker compose run --rm hibrido python descargar_modelo.py
+```
+
+Para descargar ambos modelos locales:
+
+```bash
+docker compose run --rm hibrido python descargar_modelo.py --todos
+```
+
+Estos comandos requieren internet y descargan pesos; no son necesarios para la
+prueba web. La imagen usa la arquitectura nativa de Docker y no instala CUDA;
+dentro del contenedor Linux no está disponible el backend MPS de Apple Silicon.
+
+**Limitación de cámara en macOS:** el servidor abre un índice de cámara mediante
+`cv2.VideoCapture` y un índice entero (`--camara`). No hay implementación para
+URLs RTSP ni cámaras IP. Docker Desktop en macOS no expone automáticamente ni
+garantiza el acceso del contenedor a la cámara integrada del Mac; por eso la
+ejecución real con esa cámara no está validada y puede fallar aunque el
+contenedor y el modelo estén disponibles. Para usar esa cámara desde Docker en
+Mac falta un puente que presente la captura como un dispositivo V4L2 accesible
+desde la VM Linux de Docker Desktop; ese puente no forma parte de este proyecto.
+La alternativa disponible es ejecutar el servidor nativamente en macOS. En un
+host Linux con una cámara V4L2, la adaptación concreta consiste en mapear el
+dispositivo al contenedor (por ejemplo, `/dev/video0:/dev/video0`) y usar el
+índice entero correspondiente con `--camara 0`; ese mapeo no se añade por
+defecto porque no es portable a macOS y no ha sido probado aquí. No se configura
+ni se afirma soporte automático para cámaras USB, IP o RTSP.
+
+La prueba web escucha en el puerto 8000, publicado solo en `127.0.0.1`. El
+Compose normal puede cambiar los ajustes de `config.json`, porque la UI persiste
+los cambios allí; revisá ese archivo antes de iniciar el servicio real. El
+servicio `hibrido-prueba` lo protege con un montaje de solo lectura.
+
+La UI y sus endpoints de configuración no tienen autenticación. El binding a
+`127.0.0.1` evita publicarlos en otras interfaces del host en esta configuración
+de Compose, pero no es protección suficiente para un despliegue accesible desde
+Internet o una red compartida. No cambies el puerto a una interfaz pública ni
+publiques el servicio hasta proteger la UI y todos sus endpoints con
+autenticación y transporte seguro. `/api/config` devuelve la configuración de
+la aplicación; no guardes credenciales en `config.json`.
+
+Uvicorn escucha en `0.0.0.0:8000` dentro del contenedor para que Docker pueda
+alcanzarlo; Compose publica el puerto del host únicamente en `127.0.0.1:8000`.
+Esto es una configuración local segura, no un ingreso remoto a una nube privada.
+Para un despliegue privado, mantené la aplicación en una red privada de
+contenedores y permití el acceso solo desde un gateway/reverse proxy confiable
+que aplique autenticación y TLS. Este repositorio no incluye ni configura ese
+gateway; no publiques directamente el puerto 8000 ni lo enlaces a `0.0.0.0`.
+
+La implementación híbrida disponible todavía abre la cámara por índice y no
+acepta cámara IP/RTSP/SRT. La integración atribuida a Matías y su documento
+explicativo no aparecen en el código, historial ni ramas remotas disponibles al
+revisar este repositorio. No se agregan dependencias FFmpeg/SRT sin una ruta de
+código que las use. Docker no puede usar esa cámara hasta integrar y verificar
+la implementación real y definir cómo inyectar cualquier credencial como
+secreto de ejecución, sin incluirla en configuración, imagen, argumentos o
+logs.
+
+La imagen se puede construir y publicar en el registro que el equipo elija, pero
+esta configuración de Compose no es un despliegue público listo: los endpoints
+de la UI y configuración no tienen autenticación. Mantené el puerto enlazado a
+localhost o protegé todos los endpoints con autenticación y transporte seguro
+antes de exponerlos en una red compartida o en Internet.
+
+### Servidor privado (preparación)
+
+El servicio normal conserva el reinicio automático (`unless-stopped`) y sigue
+publicando el puerto únicamente en `127.0.0.1` del servidor. `WEB_PORT` es la
+única variable de Compose: es opcional, debe ser un puerto disponible del host
+y por defecto vale `8000`. Se puede definir en el entorno del comando o en un
+archivo `.env` local no versionado; no cambia la dirección de escucha, que
+permanece en localhost. No hay variables obligatorias ni datos de cámara
+configurados para el despliegue.
+
+En un servidor nuevo hay que preparar el `hibrido/config.json` de forma segura
+en el host y conservarlo fuera de la imagen; Compose lo monta porque la UI
+guarda allí los ajustes. Las capturas usan `hibrido/capturas` y los modelos
+persisten en volúmenes Docker. No copies credenciales a `config.json`, al
+archivo `.env` ni a la imagen. La aplicación no tiene autenticación: para
+administrarla remotamente, mantené el puerto en localhost y accedé mediante un
+túnel SSH o una solución de acceso privado que autentique y cifre la conexión;
+no publiques `8000` ni lo enlaces a `0.0.0.0`.
+
+La configuración permite construir y mantener el contenedor en el servidor,
+pero todavía no habilita la ejecución real de detección allí: el código abre
+una cámara por índice local y no implementa SRT. No ejecutes el servicio normal
+hasta integrar y verificar la implementación de cámara real. El servicio
+`hibrido-prueba` sirve únicamente para web sin detector, modelo ni cámara y no
+certifica la integración.
