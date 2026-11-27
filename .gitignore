@@ -218,3 +218,6 @@ __marimo__/
 .streamlit/secrets.toml
 .DS_Store
 harness/run_eval.py.bak
+
+# Sesión de Blink del detector (token de la cuenta)
+hibrido/.blink_sesion.json

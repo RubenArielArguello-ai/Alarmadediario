@@ -8,13 +8,17 @@ Arranca en http://localhost:8000 y:
   - sirve la UI web y transmite video + estado por WebSocket
   - registra cada alarma en capturas/detecciones.csv y, si está activo,
     dispara el webhook de n8n que ya usaba el proyecto original
-  - si está activo, manda la foto de la alarma por Telegram (notificador_telegram.py)
+  - si está activo, manda la foto de la alarma por Telegram (notificador_telegram.py):
+    vía el workflow de n8n y, si n8n falla, directo con el bot
+  - la imagen sale de una webcam (OpenCV) o de una cámara Blink (camara_blink.py),
+    que saca una foto cada 60 s desde cualquier WiFi
 
 Todo corre en localhost. No necesita internet una vez descargado el modelo.
 
 Uso:
     python server.py
     python server.py --camara 1 --puerto 8080
+    python server.py --blink                  # la Blink de config.json en vez de la webcam
     python server.py --modo solo_color      # sin modelo, como el proyecto viejo
     python server.py --motor claude         # verifica con Claude (necesita ANTHROPIC_API_KEY)
     python server.py --motor openrouter     # verifica vía OpenRouter (necesita OPENROUTER_API_KEY)
@@ -39,6 +43,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from detector import DetectorHibrido, Estado
+from camara_blink import RUTA_SESION as RUTA_SESION_BLINK
+from camara_blink import CamaraBlink
 from notificador_telegram import NotificadorTelegram
 
 RAIZ = Path(__file__).parent
@@ -62,12 +68,60 @@ class Aplicacion:
         self.clientes: set[WebSocket] = set()
         self.corriendo = False
         self.tarea_inferencia: asyncio.Task | None = None
+        self._foto_vista: float | None = None   # última foto de la Blink ya chequeada
+        self.pausado = False   # vigilancia pausada desde la UI: no analiza ni avisa
         self.carpeta_capturas = RAIZ / config["guardado"]["carpeta"]
         self.carpeta_capturas.mkdir(exist_ok=True)
 
     # ------------------------------------------------------------- cámara
     def abrir_camara(self) -> None:
-        idx = self.cfg["camara"]["indice"]
+        self.camara, frame = self.abrir_fuente(self.cfg["camara"])
+        alto, ancho = frame.shape[:2]
+        self.activar_roi(alto, ancho)
+        self.resolucion_de_camara()
+        self.detector.usar_chequeo_por_foto(self.cfg["camara"].get("tipo") == "blink")
+
+    def seccion_motor(self) -> dict:
+        m = self.cfg["modelo"]
+        return m.setdefault(m["motor"], {}) if m.get("motor") else m
+
+    def resolucion_de_camara(self) -> int | None:
+        """Pone la resolución del modelo que corresponde al tipo de cámara.
+
+        La webcam manda video y el modelo corre seguido: conviene rápido (320).
+        La Blink manda una foto por minuto, más lejana: sobra tiempo y el
+        objeto queda chico, así que conviene 640. Se toma de
+        <motor>.resolucion_por_camara; si el motor no la tiene, no se toca.
+        """
+        motor = self.detector.motor
+        por_camara = self.seccion_motor().get("resolucion_por_camara")
+        if not por_camara or not hasattr(motor, "aplicar_resolucion"):
+            return None
+        tipo = self.cfg["camara"].get("tipo", "local")
+        res = por_camara.get(tipo)
+        if res and int(res) != motor.resolucion:
+            print(f"[modelo] cámara {tipo}: paso a resolución {res}")
+            motor.aplicar_resolucion(int(res))
+        self.seccion_motor()["resolucion"] = motor.resolucion
+        return motor.resolucion
+
+    def abrir_fuente(self, cam_cfg: dict):
+        """Abre la webcam o la Blink que diga cam_cfg. Devuelve (cámara, primer frame)."""
+        if cam_cfg.get("tipo") == "blink":
+            cam = CamaraBlink(cam_cfg.get("blink", {}), al_fallar=self.telegram.avisar_texto)
+            print(f"[camara] esperando la primera foto de la Blink '{cam.nombre}'…")
+            try:
+                cam.esperar_primera(timeout=cam.espera_max + 60)
+            except Exception:
+                cam.release()
+                raise
+            _, frame = cam.read()
+            alto, ancho = frame.shape[:2]
+            print(f"[camara] Blink '{cam.nombre}' {ancho}x{alto}, "
+                  f"una foto cada {cam.intervalo} s")
+            return cam, frame
+
+        idx = cam_cfg["indice"]
         cam = cv2.VideoCapture(idx)
         if not cam.isOpened():
             raise RuntimeError(
@@ -75,34 +129,123 @@ class Aplicacion:
                 "Probá otro índice con: python server.py --camara 1\n"
                 "En macOS revisá Ajustes > Privacidad y seguridad > Cámara."
             )
-        cam.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg["camara"]["ancho"])
-        cam.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cfg["camara"]["alto"])
-        self.camara = cam
-
+        cam.set(cv2.CAP_PROP_FRAME_WIDTH, cam_cfg["ancho"])
+        cam.set(cv2.CAP_PROP_FRAME_HEIGHT, cam_cfg["alto"])
         ok, frame = cam.read()
         if not ok:
+            cam.release()
             raise RuntimeError("La cámara abrió pero no devuelve imagen.")
         alto, ancho = frame.shape[:2]
         print(f"[camara] {ancho}x{alto} en índice {idx}")
+        return cam, frame
 
+    @staticmethod
+    def clave_camara(cam_cfg: dict) -> str:
+        if cam_cfg.get("tipo") == "blink":
+            return "blink:" + cam_cfg.get("blink", {}).get("nombre", "")
+        return f"local:{cam_cfg.get('indice', 0)}"
+
+    @staticmethod
+    def texto_camara(c: dict) -> str:
+        if c.get("tipo") == "blink":
+            b = c.get("blink", {})
+            return (f"Blink «{b.get('nombre', '')}» · una foto cada "
+                    f"{max(60, int(b.get('intervalo_s', 60)))} s")
+        return f"Cámara de la notebook (índice {c.get('indice', 0)})"
+
+    def describir_camara(self) -> dict:
+        c = self.cfg["camara"]
+        # Las dos únicas opciones: la webcam de la notebook y LA Blink de config.json.
+        opciones = {"local": "Cámara de la notebook",
+                    "blink": f"Blink «{c.get('blink', {}).get('nombre', '')}»"}
+        if c.get("tipo") == "blink":
+            return {"tipo": "blink", "nombre": c.get("blink", {}).get("nombre", ""),
+                    "texto": self.texto_camara(c), "opciones": opciones}
+        return {"tipo": "local", "indice": c.get("indice", 0),
+                "texto": self.texto_camara(c), "opciones": opciones}
+
+    async def cambiar_camara(self, tipo: str) -> dict:
+        """Cambia en caliente entre la webcam y la Blink de config.json.
+
+        No se elige otra Blink de la cuenta ni otro índice: el nombre y el
+        índice son los de config.json. Si la nueva no abre, sigue la anterior.
+        """
+        import copy
+
+        nuevo = copy.deepcopy(self.cfg["camara"])
+        nuevo["tipo"] = tipo
+        clave_vieja, clave_nueva = self.clave_camara(self.cfg["camara"]), self.clave_camara(nuevo)
+        if clave_vieja == clave_nueva and self.camara is not None:
+            return {"ok": True, "camara": self.describir_camara(), "roi": self.cfg["roi"]}
+
+        try:
+            cam, frame = await asyncio.to_thread(self.abrir_fuente, nuevo)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+        # Cada cámara ve otra imagen: guarda la zona de la vieja y trae la de la nueva.
+        zonas = self.cfg.setdefault("roi_por_camara", {})
+        zonas[clave_vieja] = dict(self.cfg["roi"])
+        vieja, self.camara = self.camara, cam
+        self.cfg["camara"] = nuevo
+        if vieja is not None:
+            vieja.release()
+        self.cfg["roi"] = dict(zonas.get(clave_nueva, {"activa": False, "puntos": []}))
+        alto, ancho = frame.shape[:2]
+        roi = self.cfg["roi"]
+        self.detector.set_roi(roi["puntos"] if roi.get("activa") else [], alto, ancho)
+        self.detector.reiniciar_fondo()
+        self.detector.usar_chequeo_por_foto(tipo == "blink")
+        self._foto_vista = None
+        if hasattr(cam, "pausada"):
+            cam.pausada = self.pausado
+        self.ultimo_frame = frame
+        print(f"[camara] cambio a {self.describir_camara()['texto']}")
+        res = self.resolucion_de_camara()
+        return {"ok": True, "camara": self.describir_camara(), "roi": self.cfg["roi"],
+                "resolucion": res}
+
+    def activar_roi(self, alto: int, ancho: int) -> None:
         roi = self.cfg["roi"]
         if roi.get("activa"):
             self.detector.set_roi(roi["puntos"], alto, ancho)
             print("[roi] activa")
 
+    def pausar(self, pausa: bool) -> None:
+        """Pausa o reanuda la vigilancia. En pausa no se analiza ni se avisa,
+        y a la Blink no se le piden fotos."""
+        self.pausado = bool(pausa)
+        if hasattr(self.camara, "pausada"):
+            self.camara.pausada = self.pausado
+        if not self.pausado:
+            # Mientras estuvo en pausa pudo cambiar todo: se mira enseguida.
+            self.detector.chequear_ya()
+        print(f"[vigilancia] {'PAUSADA' if self.pausado else 'reanudada'}")
+
     # ------------------------------------------------------------ bucle
     async def bucle(self) -> None:
         self.corriendo = True
-        intervalo = 1.0 / self.cfg["camara"]["fps_captura"]
 
         while self.corriendo:
+            if self.pausado:
+                await asyncio.sleep(0.5)
+                continue
             t0 = time.time()
+            # Se recalcula en cada vuelta: la cámara se puede cambiar desde la UI.
+            intervalo = 1.0 / self.cfg["camara"]["fps_captura"]
+            if self.cfg["camara"].get("tipo") == "blink":
+                intervalo = 1.0  # la imagen cambia una vez por minuto: no hace falta más
             ok, frame = await asyncio.to_thread(self.camara.read)
             if not ok:
                 await asyncio.sleep(0.5)
                 continue
 
             self.ultimo_frame = frame
+            # Blink: el chequeo va al ritmo de las fotos (ver detector.foto_nueva).
+            llegada = getattr(self.camara, "ultima_foto", None)
+            if llegada is not None and llegada != self._foto_vista:
+                self._foto_vista = llegada
+                self.detector.foto_nueva(self.camara.proxima_foto())
             try:
                 resultado = await asyncio.to_thread(self.detector.procesar, frame)
             except Exception as e:
@@ -321,6 +464,57 @@ def crear_app(config: dict) -> tuple[FastAPI, Aplicacion]:
         guardar_config()
         return {"ok": True}
 
+    @app.get("/api/vigilancia")
+    async def get_vigilancia():
+        return {"activa": not estado.pausado}
+
+    @app.post("/api/vigilancia")
+    async def set_vigilancia(datos: dict):
+        """{"activa": false} pausa la vigilancia; {"activa": true} la reanuda."""
+        estado.pausar(not bool(datos.get("activa", True)))
+        return {"ok": True, "activa": not estado.pausado}
+
+    @app.get("/api/telegram")
+    async def get_telegram():
+        return estado.telegram.estado()
+
+    @app.post("/api/telegram")
+    async def set_telegram(datos: dict):
+        """{"activo": true/false} prende o apaga el aviso por Telegram."""
+        activo = bool(datos.get("activo"))
+        estado.telegram.activo = activo
+        config.setdefault("telegram", {})["activo"] = activo
+        guardar_config()
+        print(f"[telegram] {estado.telegram.describir()}")
+        return estado.telegram.estado()
+
+    @app.post("/api/telegram/prueba")
+    async def probar_telegram():
+        """Manda un mensaje de prueba (sin foto) y dice si llegó."""
+        n = estado.telegram
+        falta = n.configurado()
+        if falta:
+            return {"ok": False, "error": falta}
+        ok = await asyncio.to_thread(
+            n._enviar, n.texto(estado.detector.nombre, "Mensaje de prueba de la Alarma de Diario"))
+        return {"ok": ok, "error": None if ok else "no llegó: mirá la terminal del servidor"}
+
+    @app.get("/api/camara")
+    async def get_camara():
+        """La cámara actual y las dos opciones (webcam o la Blink de config.json)."""
+        return {"actual": estado.describir_camara(),
+                "blink_configurada": RUTA_SESION_BLINK.exists()}
+
+    @app.post("/api/camara")
+    async def set_camara(datos: dict):
+        tipo = datos.get("tipo", "local")
+        if tipo not in ("local", "blink"):
+            return {"ok": False, "error": "tipo tiene que ser local o blink"}
+        r = await estado.cambiar_camara(tipo)
+        if r["ok"]:
+            guardar_config()
+        return r
+
     @app.post("/api/recalibrar")
     async def recalibrar():
         estado.detector.reiniciar_fondo()
@@ -415,6 +609,10 @@ def crear_app(config: dict) -> tuple[FastAPI, Aplicacion]:
         motor = estado.detector.motor
         motor.aplicar_resolucion(int(datos.get("resolucion", 640)))
         seccion_motor()["resolucion"] = motor.resolucion
+        # Elegida a mano, queda como la de este tipo de cámara.
+        por_camara = seccion_motor().get("resolucion_por_camara")
+        if por_camara is not None:
+            por_camara[config["camara"].get("tipo", "local")] = motor.resolucion
         guardar_config()
         return {"ok": True, "resolucion": motor.resolucion}
 
@@ -447,6 +645,9 @@ def crear_app(config: dict) -> tuple[FastAPI, Aplicacion]:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--camara", type=int, help="índice de cámara (0, 1, 2…)")
+    ap.add_argument("--blink", nargs="?", const="", metavar="NOMBRE",
+                    help="usar la cámara Blink de config.json (camara.blink.nombre). "
+                         "Si se da un nombre, tiene que ser ese: no se usa otra Blink.")
     ap.add_argument("--puerto", type=int, default=8000)
     ap.add_argument("--device", help="mps | cuda | cpu")
     ap.add_argument("--modo", help="cascada | and | or | ponderado | solo_color | solo_modelo")
@@ -457,6 +658,13 @@ def main() -> None:
     config = json.loads(RUTA_CONFIG.read_text())
     if args.camara is not None:
         config["camara"]["indice"] = args.camara
+        config["camara"]["tipo"] = "local"
+    if args.blink is not None:
+        permitida = config["camara"].get("blink", {}).get("nombre", "")
+        if args.blink.strip() and args.blink.strip() != permitida:
+            raise SystemExit(f"La única cámara Blink habilitada es «{permitida}» "
+                             "(camara.blink.nombre en config.json).")
+        config["camara"]["tipo"] = "blink"
     if args.device:
         config["modelo"]["device"] = args.device
     if args.modo:

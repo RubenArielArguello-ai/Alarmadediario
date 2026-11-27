@@ -19,6 +19,7 @@ numpy>=1.24.0,<2.0.0      # torch 2.2 no soporta numpy 2.x
 fastapi>=0.110.0          # servidor local
 uvicorn[standard]>=0.29.0 # ASGI server + websockets
 requests>=2.31.0          # webhook a n8n (igual que el proyecto original)
+blinkpy>=0.25.0           # cámara Blink como fuente (camara_blink.py); pide Python 3.10+
 
 # YOLO-World (motor por defecto). CLIP codifica los prompts de texto; se instala
 # desde el fork de Ultralytics, que es el que espera su código.

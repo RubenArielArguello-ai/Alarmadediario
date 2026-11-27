@@ -152,6 +152,14 @@ class DetectorHibrido:
         self._inferencias_ciclo = 0
         self._proximo_chequeo = 0.0              # 0 = chequear ya
         self._resultado_chequeo = ""
+        # Con una fuente que manda fotos sueltas (la Blink, una por minuto) el
+        # chequeo no va por reloj propio: lo dispara la llegada de cada foto
+        # (server.py llama a foto_nueva) y el contador muestra cuánto falta
+        # para la siguiente. Así no se chequea dos veces la misma foto ni se
+        # queda una foto nueva sin mirar hasta el próximo intervalo.
+        self.chequeo_por_foto = False
+        self._proxima_foto: float | None = None  # cuándo se espera la próxima
+        self._foto_pendiente = False  # llegó una foto durante un chequeo
         # Cómo se veía la zona cuando se llegó al último veredicto. Entre
         # chequeos no se mira, así que es la única forma de saber si alguien
         # cambió el objeto mientras tanto.
@@ -243,7 +251,36 @@ class DetectorHibrido:
     # ------------------------------------------------------ chequeo periódico
     @property
     def periodico(self) -> bool:
-        return self.intervalo_chequeo > 0
+        return self.intervalo_chequeo > 0 or self.chequeo_por_foto
+
+    def usar_chequeo_por_foto(self, activo: bool) -> None:
+        """Con la Blink, chequear al llegar cada foto en vez de por intervalo."""
+        with self._lock:
+            self.chequeo_por_foto = bool(activo)
+            self._proxima_foto = None
+            self._foto_pendiente = False
+            self._ciclo_desde = None
+            self._proximo_chequeo = 0.0
+
+    @property
+    def confirmaciones_requeridas(self) -> int:
+        """Con la Blink el modelo mira siempre la MISMA foto fija: preguntarle
+        dos veces da la misma respuesta y duplica la espera (~30 s por consulta
+        en CPU). Con una foto alcanza una confirmación."""
+        return 1 if self.chequeo_por_foto else self.confirmaciones_necesarias
+
+    def foto_nueva(self, proxima: float | None) -> None:
+        """Llegó una foto nueva: se chequea ya. `proxima` = cuándo se espera la siguiente."""
+        with self._lock:
+            self._proxima_foto = proxima
+            if self._ciclo_desde is not None:
+                # Hay un chequeo en curso (el modelo puede tardar ~30 s): no se
+                # corta, porque su resultado se perdería. La foto nueva se
+                # chequea apenas termine.
+                self._foto_pendiente = True
+                return
+            self.confirmaciones = 0
+            self._proximo_chequeo = 0.0
 
     def _abrir_ciclo(self, ahora: float, gris: np.ndarray) -> None:
         self._conf_max_ciclo = 0.0
@@ -267,7 +304,14 @@ class DetectorHibrido:
         if not self.periodico or self._ciclo_desde is None:
             return
         self._ciclo_desde = None
-        self._proximo_chequeo = ahora + self.intervalo_chequeo
+        # Con la Blink el próximo chequeo es la próxima foto (foto_nueva).
+        if self.chequeo_por_foto:
+            # La próxima foto abre el chequeo siguiente; si ya llegó mientras
+            # este corría, arranca enseguida.
+            self._proximo_chequeo = 0.0 if self._foto_pendiente else float("inf")
+            self._foto_pendiente = False
+        else:
+            self._proximo_chequeo = ahora + self.intervalo_chequeo
         self._resultado_chequeo = resultado
         if self.frame_anterior is not None:
             self._gris_conclusion = self.frame_anterior.copy()
@@ -296,6 +340,10 @@ class DetectorHibrido:
         no hay chequeo periódico."""
         if not self.periodico or self._ciclo_desde is not None:
             return -1.0
+        if self.chequeo_por_foto and self._proximo_chequeo == float("inf"):
+            if self._proxima_foto is None:
+                return -1.0
+            return max(0.0, self._proxima_foto - ahora)
         return max(0.0, self._proximo_chequeo - ahora)
 
     # ------------------------------------------------------------ pre-proceso
@@ -450,7 +498,7 @@ class DetectorHibrido:
                 self.confirmaciones = max(0, self.confirmaciones - 1)
 
             ahora = time.time()
-            if self.confirmaciones >= self.confirmaciones_necesarias:
+            if self.confirmaciones >= self.confirmaciones_requeridas:
                 if self._puede_entrar_diario(ahora):
                     self.ultima_alarma = ahora
                     self.estado = Estado.DIARIO
@@ -463,7 +511,7 @@ class DetectorHibrido:
                 # Con una duda razonable (alguna consulta llegó a la mitad del
                 # umbral) no se absorbe al fondo: se vuelve a verificar.
                 self._duda_descartado = self._conf_max_ciclo >= 0.5 * self.motor.umbral
-                if self._inferencias_ciclo >= self.confirmaciones_necesarias:
+                if self._inferencias_ciclo >= self.confirmaciones_requeridas:
                     self._cerrar_ciclo(
                         ahora, f"Hay algo en la zona, pero no es {self.nombre}."
                     )
@@ -536,12 +584,14 @@ class DetectorHibrido:
                 # para que el próximo chequeo pueda medir movimiento.
                 self.frame_anterior = gris.copy()
                 if ahora < self._proximo_chequeo:
-                    falta = self._proximo_chequeo - ahora
+                    falta = self.segundos_para_chequeo(ahora)
+                    if self.chequeo_por_foto:
+                        cuando = ("esperando la foto nueva de la Blink…" if falta <= 0.5
+                                  else f"Próximo chequeo en {falta:.0f}s (foto nueva de la Blink).")
+                    else:
+                        cuando = f"Próximo chequeo en {falta:.0f}s."
                     return self._armar(
-                        self.estado,
-                        f"{self._resultado_chequeo} Próximo chequeo en {falta:.0f}s."
-                        .strip(),
-                        0.0,
+                        self.estado, f"{self._resultado_chequeo} {cuando}".strip(), 0.0,
                     )
                 self._abrir_ciclo(ahora, gris)
             elif (ahora - self._ciclo_desde > self.max_seg_chequeo
@@ -681,7 +731,7 @@ class DetectorHibrido:
         elif self._ultimo_veredicto is not None:
             msg = (f"{self._ultimo_veredicto.explicacion} — "
                    f"confirmaciones {self.confirmaciones}/"
-                   f"{self.confirmaciones_necesarias}")
+                   f"{self.confirmaciones_requeridas}")
         else:
             msg = "Objeto nuevo — esperando al modelo"
 

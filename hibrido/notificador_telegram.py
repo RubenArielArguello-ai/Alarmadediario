@@ -13,6 +13,12 @@ Probar la conexión sin esperar una alarma:
     python hibrido/notificador_telegram.py --chats    # lista los chats del bot
     python hibrido/notificador_telegram.py --prueba   # manda un mensaje de prueba
 
+Camino principal: n8n. Si hay una dirección de n8n (N8N_WEBHOOK_URL en
+hibrido/.env, nunca en config.json) se le manda al workflow
+"Webhook a Telegram - enviar-telegram" {"mensaje": ..., "imagen": <foto en
+base64>} y n8n la reenvía al grupo. Si n8n no contesta o contesta error, el
+aviso sale directo por Telegram con el bot de hibrido/.env (respaldo).
+
 Si en config.json se completa telegram.notificador_url, en vez de hablar
 directo con Telegram se le manda el texto a la API Alarmadediario-notificador
 (POST /api/notificarTelegram), y las credenciales las tiene ella.
@@ -21,9 +27,12 @@ directo con Telegram se le manda el texto a la API Alarmadediario-notificador
 from __future__ import annotations
 
 import argparse
+import base64
+import html
 import json
 import os
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -54,13 +63,18 @@ class NotificadorTelegram:
         self.enviar_foto = cfg.get("enviar_foto", True)
         self.mensaje = cfg.get("mensaje", "🚨 {objeto} detectado — {hora}")
         self.notificador_url = (cfg.get("notificador_url") or "").strip()
+        # Solo de hibrido/.env: config.json se sube a GitHub y la UI lo lee entero.
+        self.n8n_url = os.getenv("N8N_WEBHOOK_URL", "").strip()
         self.timeout = cfg.get("timeout_s", 15)
+        # Si el objeto aparece y desaparece seguido, no llenar el grupo de avisos.
+        self.espera = float(cfg.get("espera_entre_avisos_s", 60))
+        self._ultimo_aviso = 0.0
         self.token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
         self.chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
 
     def configurado(self) -> str | None:
         """None si está todo para mandar; si no, qué falta."""
-        if self.notificador_url:
+        if self.notificador_url or self.n8n_url:
             return None
         if not self.token:
             return "falta TELEGRAM_BOT_TOKEN en hibrido/.env"
@@ -76,7 +90,23 @@ class NotificadorTelegram:
             return f"activo pero {falta}"
         if self.notificador_url:
             return f"activo, vía {self.notificador_url}"
-        return f"activo, al chat {self.chat_id}"
+        directo = f"directo al chat {self.chat_id}" if self.token and self.chat_id else ""
+        if self.n8n_url:
+            respaldo = f"; si falla, {directo}" if directo else "; sin respaldo directo"
+            return f"activo, vía n8n{respaldo}"
+        return f"activo, {directo}"
+
+    def estado(self) -> dict:
+        """Para la página: sin token ni chat, solo si está listo y por dónde sale."""
+        falta = self.configurado()
+        if self.notificador_url:
+            via = "la API notificador"
+        elif self.n8n_url:
+            via = "n8n (con respaldo directo)" if self.token and self.chat_id else "n8n"
+        else:
+            via = "directo con el bot"
+        return {"activo": self.activo, "falta": falta, "via": via,
+                "espera_s": self.espera}
 
     def texto(self, objeto: str, veredicto: str = "") -> str:
         hora = datetime.now().strftime("%d/%m %H:%M:%S")
@@ -91,13 +121,48 @@ class NotificadorTelegram:
         if falta:
             print(f"[telegram] no mando el aviso: {falta}")
             return
+        ahora = time.time()
+        if ahora - self._ultimo_aviso < self.espera:
+            print(f"[telegram] no repito el aviso: el anterior salió hace "
+                  f"{ahora - self._ultimo_aviso:.0f} s (espera_entre_avisos_s={self.espera:.0f})")
+            return
+        self._ultimo_aviso = ahora
         threading.Thread(
             target=self._enviar,
             args=(self.texto(objeto, veredicto), ruta_foto),
             daemon=True,
         ).start()
 
+    def avisar_texto(self, texto: str) -> None:
+        """Aviso suelto (por ejemplo, que la cámara Blink dejó de responder)."""
+        if self.activo and not self.configurado():
+            threading.Thread(target=self._enviar, args=(texto,), daemon=True).start()
+
     def _enviar(self, texto: str, ruta_foto: str = "") -> bool:
+        if self.n8n_url and not self.notificador_url:
+            if self._enviar_n8n(texto, ruta_foto):
+                return True
+            if not (self.token and self.chat_id):
+                return False
+            print("[telegram] uso el respaldo: directo a Telegram")
+        return self._enviar_directo(texto, ruta_foto)
+
+    def _enviar_n8n(self, texto: str, ruta_foto: str = "") -> bool:
+        """Workflow n8n: exige "mensaje"; "imagen" en base64 es opcional."""
+        cuerpo = {"mensaje": html.escape(texto, quote=False)}  # n8n lo manda como HTML
+        if self.enviar_foto and ruta_foto and Path(ruta_foto).exists():
+            cuerpo["imagen"] = base64.b64encode(Path(ruta_foto).read_bytes()).decode("ascii")
+        try:
+            r = requests.post(self.n8n_url, json=cuerpo, timeout=self.timeout)
+            if r.ok:
+                print("[telegram] aviso enviado vía n8n")
+                return True
+            print(f"[telegram] n8n respondió {r.status_code}: {_detalle(r)}")
+        except Exception as e:
+            print(f"[telegram] n8n no contesta: {e}")
+        return False
+
+    def _enviar_directo(self, texto: str, ruta_foto: str = "") -> bool:
         try:
             if self.notificador_url:
                 r = requests.post(self.notificador_url, json={"texto": texto},
