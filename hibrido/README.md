@@ -376,6 +376,77 @@ Todo está en `config.json`, comentado con claves `_nota`. Los que más importan
 - `hibrido/capturas/detecciones.csv` — una fila por alarma con las dos señales
 - webhook a n8n — desactivado por defecto; se prende en `config.json`
   (`webhook.activo`). Es el mismo endpoint que usaba `detect_diario.py`.
+- aviso por Telegram — desactivado por defecto. Manda la foto anotada de la
+  alarma a un chat o grupo. Ver abajo.
+
+## Aviso por Telegram
+
+1. **Crear el bot.** En Telegram, hablarle a `@BotFather`, mandarle `/newbot` y
+   seguir los pasos. Al final da el token del bot.
+2. **Guardar las credenciales.** Copiar `hibrido/.env.example` a `hibrido/.env` y
+   completar `TELEGRAM_BOT_TOKEN`. `hibrido/.env` no se sube a GitHub: el token
+   nunca va en `config.json`.
+3. **Sacar el chat.** Escribirle algo al bot (o agregarlo al grupo y escribir en
+   el grupo) y correr `python hibrido/notificador_telegram.py --chats`. Copiar el
+   número a `TELEGRAM_CHAT_ID` en `hibrido/.env`.
+4. **Probar.** `python hibrido/notificador_telegram.py --prueba` tiene que dejar
+   un mensaje en el chat.
+5. **Prender.** En `config.json`, `telegram.activo` en `true`, y reiniciar el
+   servidor. Al arrancar muestra `[telegram] activo, al chat ...`.
+
+Cada alarma nueva manda la foto con el texto de `telegram.mensaje`. El envío va
+en un hilo aparte: si Telegram tarda o no responde, el video no se frena, y el
+error queda en la terminal como `[telegram] ...`.
+
+Si en vez de hablar directo con Telegram se quiere usar la API
+`Alarmadediario-notificador` del equipo, completar `telegram.notificador_url`
+(ej. `http://localhost:8001/api/notificarTelegram`). En ese caso se manda solo el
+texto y las credenciales las tiene esa API. Ojo: esa API también usa el puerto
+8000 por defecto, así que hay que levantarla en otro (`--port 8001`).
+
+### Vía n8n, con respaldo directo
+
+El camino principal es el workflow de n8n `Webhook a Telegram - enviar-telegram.json`
+(en la raíz del repo). Completar `N8N_WEBHOOK_URL` en `hibrido/.env` con la URL de
+producción de su nodo Webhook (termina en `/webhook/enviar-telegram`). Cada alarma
+le manda `{"mensaje": "...", "imagen": "<foto en base64>"}` y n8n la reenvía al
+grupo. Si n8n no contesta o responde error, el aviso sale directo con el bot de
+`hibrido/.env`. Al arrancar se ve `[telegram] activo, vía n8n; si falla, directo al chat ...`.
+
+## Cámara Blink
+
+En vez de la webcam, el detector puede usar una cámara Blink, conectada a
+cualquier WiFi (todo pasa por la nube de Blink):
+
+1. `pip install blinkpy` (necesita Python 3.10 o más).
+2. `python hibrido/camara_blink.py --login`: pide el mail, la clave y el código que
+   manda Blink. Deja la sesión en `hibrido/.blink_sesion.json` (no se sube a GitHub).
+3. `python hibrido/camara_blink.py --foto "Oficina"`: prueba una foto.
+4. `python hibrido/server.py --blink` (o `camara.tipo: "blink"` en `config.json`).
+
+**Solo dos cámaras:** la app ofrece únicamente la webcam de la notebook
+(`camara.indice`) y la Blink de `camara.blink.nombre` ("Oficina"). Las demás
+cámaras de la cuenta Blink no se pueden elegir, ni desde la UI ni con `--blink`
+(un nombre distinto corta el arranque). Para habilitar otra, se cambia el nombre
+en `config.json`.
+
+**Cambiar de cámara sin reiniciar:** en la UI, panel **Cámara**, elegir "Cámara de
+la notebook" o "Blink «Oficina»" y tocar **Usar esta cámara**. Si la nueva no
+abre, sigue la anterior y se ve el motivo. Cada cámara recuerda su propia zona
+(`roi_por_camara` en `config.json`) y su resolución del modelo (320 la webcam,
+640 la Blink, en `owlv2.resolucion_por_camara`).
+
+**Credenciales:** la sesión de Blink (`hibrido/.blink_sesion.json`) se guarda
+sin la clave, solo con permisos para tu usuario, y está en `.gitignore`. Cada
+integrante del equipo usa su propia cuenta Blink con su propio `--login`: el
+repo no lleva ningún dato de la cuenta, solo el nombre de la cámara.
+
+Blink no da video en vivo: el detector le pide una foto cada
+`camara.blink.intervalo_s` segundos (60, el mínimo que conviene para no chocar
+con los límites de Blink) y analiza siempre la última. Volver a marcar la zona
+(ROI), porque la imagen es otra. Si la cámara falla `fallas_para_avisar` veces
+seguidas, avisa por Telegram que no responde. Si al arrancar está offline, el
+servidor no levanta y lo dice.
 
 ## Verificación (rama `fix/hibrido-robustez`)
 

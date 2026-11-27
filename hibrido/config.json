@@ -1,28 +1,44 @@
 {
   "camara": {
+    "tipo": "blink",
+    "_tipo_nota": "local = webcam por OpenCV (indice). blink = camara Blink de la seccion blink (python server.py --blink \"Oficina Juan\").",
     "indice": 0,
     "ancho": 1280,
     "alto": 720,
-    "fps_captura": 10
+    "fps_captura": 10,
+    "blink": {
+      "nombre": "Oficina",
+      "intervalo_s": 60,
+      "_intervalo_nota": "Cada cuantos segundos se le pide una foto. Minimo 60: Blink limita las consultas.",
+      "espera_max_s": 60,
+      "fallas_para_avisar": 3,
+      "_fallas_nota": "Tras esta cantidad de fotos fallidas seguidas avisa por Telegram que la camara no responde.",
+      "_sesion": "La sesion vive en hibrido/.blink_sesion.json (no se sube). Crearla con: python hibrido/camara_blink.py --login"
+    },
+    "_cambiar": "Solo hay dos opciones: la webcam de la notebook (indice) o la Blink de blink.nombre. Se cambia desde la UI (panel Camara), con --camara N o con --blink. Otra Blink de la cuenta no se puede elegir. Cada camara guarda su zona en roi_por_camara."
   },
   "roi": {
-    "activa": false,
+    "activa": true,
     "puntos": [
       [
-        0.1,
-        0.3
+        0.2260127931769723,
+        0.7986688851913477
       ],
       [
-        0.9,
-        0.3
+        0.3315565031982942,
+        0.03993344425956739
       ],
       [
-        0.9,
-        0.95
+        0.9008528784648188,
+        0.06275255526503447
       ],
       [
-        0.1,
-        0.95
+        0.9786780383795309,
+        0.842405514618493
+      ],
+      [
+        0.22281449893390193,
+        0.8005704777751367
       ]
     ],
     "_comentario": "La alfombra, en coordenadas relativas 0-1. Se dibuja desde la UI."
@@ -50,15 +66,13 @@
   },
   "modelo": {
     "_que_es": "Validador 2: confirma que el objeto es el que dice el prompt.",
-    "motor": "owlv2",
+    "motor": "claude",
     "_motor_opciones": "owlv2 (default): local y sin costo; a 320 tarda ~0.8 s por consulta en una Mac Intel i7 de 2 nucleos | claude: verifica con la API de Anthropic; entiende espanol y distingue objetos parecidos; necesita ANTHROPIC_API_KEY y cada consulta cuesta | openrouter: lo mismo pero via OpenRouter, que con una clave da acceso a Claude, Gemini, GPT y otros; necesita OPENROUTER_API_KEY | yolo_world: local y rapido, pero en una prueba real confundio anteojos con una birome. Cada uno tiene su seccion abajo.",
     "device": "auto",
     "_device_opciones": "auto | mps (Apple Silicon) | cuda | cpu",
-    "nombre_objeto": "diario",
+    "nombre_objeto": "lapiz",
     "prompts": [
-      "a rolled newspaper",
-      "a newspaper",
-      "a folded newspaper"
+      "a pencil"
     ],
     "_prompts_nota": "En ingles. En espanol no entiende: con OWLv2, 'un lapiz' dio 0.02 contra 0.90 de 'a pencil'. Mas de una descripcion ayuda: para una birome, 'a pen' + 'a ballpoint pen' dio 0.48 en el peor caso contra 0.36 de 'a pen' solo.",
     "_prompts_anteojos": [
@@ -80,7 +94,12 @@
     "owlv2": {
       "id": "google/owlv2-base-patch16-ensemble",
       "carpeta_local": "modelos",
-      "resolucion": 320,
+      "resolucion": 640,
+      "resolucion_por_camara": {
+        "local": 320,
+        "blink": 640
+      },
+      "_resolucion_por_camara_nota": "Se aplica sola al arrancar y al cambiar de camara. Webcam 320: video, rapido. Blink 640: una foto por minuto con el objeto mas chico; el lapiz en una foto real de la Blink dio 0.22 a 320 (no llega a 0.30) y 0.86 a 640. Si cambias la resolucion a mano desde la UI, queda guardada para ese tipo de camara.",
       "_resolucion_nota": "Barrido sobre fotos reales de un escritorio (3 biromes; anteojos, control remoto, celular, mano y hoja vacia), con el recorte de la app y 'a pen' + 'a ballpoint pen'. Peor si / peor no / tiempo: 256 -> 0.51 / 0.13 / 0.7 s | 320 -> 0.48 / 0.08 / 1.1 s (la mejor separacion) | 352 -> 0.36 / 0.12 / 1.4 s | 384 -> 0.32 / 0.18 / 1.6 s. Mas resolucion no ayuda con el recorte. Con la foto ENTERA, 320 daba falsos positivos.",
       "confianza_minima": 0.3,
       "_confianza_nota": "Los scores de OWLv2 NO son probabilidades. A 320, en fotos reales: todo lo que no es birome 0.00-0.08, biromes 0.48-0.72. 0.30 queda en el medio. Recalibralo si cambias la resolucion.",
@@ -152,6 +171,52 @@
   "webhook": {
     "activo": false,
     "url": "http://localhost:5678/webhook-test/4388a0a2-d83e-4102-ba86-34c5660e8092",
-    "_nota": "Mismo webhook n8n que usaba detect_diario.py. Poner activo en true para reactivarlo."
+    "_nota": "Webhook viejo de detect_diario.py (payload estado/veredicto/score). El aviso a n8n con foto ahora va por telegram.n8n_url."
+  },
+  "telegram": {
+    "_que_es": "Aviso por Telegram cuando suena la alarma: manda la foto anotada al chat.",
+    "activo": true,
+    "_activo_nota": "Se prende y apaga también desde la página (panel Alarma). El token y el chat NO van en este archivo: van en hibrido/.env.",
+    "enviar_foto": true,
+    "mensaje": "🚨 {objeto} detectado — {hora}",
+    "_mensaje_nota": "{objeto} = el nombre del objeto buscado, {hora} = dia y hora de la alarma.",
+    "espera_entre_avisos_s": 60,
+    "_espera_nota": "Como mucho un aviso cada tantos segundos, por si el objeto aparece y desaparece seguido.",
+    "notificador_url": "",
+    "_notificador_nota": "Vacio = habla directo con Telegram. Si se completa (ej. http://localhost:8001/api/notificarTelegram) le manda solo el texto a la API Alarmadediario-notificador, que tiene sus propias credenciales.",
+    "timeout_s": 15,
+    "_n8n_nota": "Camino principal: el workflow n8n 'Webhook a Telegram'. Su URL va SOLO en hibrido/.env como N8N_WEBHOOK_URL (no aca: este archivo se sube y la UI lo lee). Si n8n falla, manda directo con el bot de hibrido/.env."
+  },
+  "roi_por_camara": {
+    "blink:Oficina": {
+      "activa": true,
+      "puntos": [
+        [
+          0.30816831683168316,
+          0.0530093870789619
+        ],
+        [
+          0.1448019801980198,
+          0.9409166206515737
+        ],
+        [
+          0.8044554455445545,
+          0.9895085588072888
+        ],
+        [
+          0.7091584158415841,
+          0.1789066813914964
+        ],
+        [
+          0.31064356435643564,
+          0.0530093870789619
+        ]
+      ],
+      "_comentario": "La alfombra, en coordenadas relativas 0-1. Se dibuja desde la UI."
+    },
+    "local:0": {
+      "activa": false,
+      "puntos": []
+    }
   }
 }

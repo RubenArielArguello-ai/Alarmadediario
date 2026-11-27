@@ -219,6 +219,9 @@ __marimo__/
 .DS_Store
 harness/run_eval.py.bak
 
+# Sesión de Blink del detector (token de la cuenta)
+hibrido/.blink_sesion.json
+
 # Local Python environments, including named backup environments
 .venv*/
 **/.venv*/
@@ -253,3 +256,6 @@ credentials/
 *.p12
 *.pfx
 *.key
+# ...salvo las plantillas sin secretos
+!.env.example
+!**/.env.example

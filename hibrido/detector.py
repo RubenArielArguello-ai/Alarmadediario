@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import threading
 import time
+import zlib
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -134,6 +135,13 @@ class DetectorHibrido:
         # resolver_inferencia(). Así el video nunca se congela.
         self.pedido_inferencia = False
         self.inferencia_activa = False
+        # Huella de la imagen actual y de la última que se le mandó al modelo.
+        # Una misma imagen se consulta UNA sola vez: la Blink entrega la misma
+        # foto durante un minuto, y preguntar de nuevo da la misma respuesta
+        # (y con Claude, cada consulta cuesta). Tampoco se reintenta tras un
+        # error: se espera a la imagen siguiente.
+        self._huella_actual: int | None = None
+        self._huella_consultada: int | None = None
 
         # --- modo prueba: analiza siempre, sin esperar movimiento ---
         self.modo_continuo = False
@@ -152,6 +160,14 @@ class DetectorHibrido:
         self._inferencias_ciclo = 0
         self._proximo_chequeo = 0.0              # 0 = chequear ya
         self._resultado_chequeo = ""
+        # Con una fuente que manda fotos sueltas (la Blink, una por minuto) el
+        # chequeo no va por reloj propio: lo dispara la llegada de cada foto
+        # (server.py llama a foto_nueva) y el contador muestra cuánto falta
+        # para la siguiente. Así no se chequea dos veces la misma foto ni se
+        # queda una foto nueva sin mirar hasta el próximo intervalo.
+        self.chequeo_por_foto = False
+        self._proxima_foto: float | None = None  # cuándo se espera la próxima
+        self._foto_pendiente = False  # llegó una foto durante un chequeo
         # Cómo se veía la zona cuando se llegó al último veredicto. Entre
         # chequeos no se mira, así que es la única forma de saber si alguien
         # cambió el objeto mientras tanto.
@@ -243,7 +259,36 @@ class DetectorHibrido:
     # ------------------------------------------------------ chequeo periódico
     @property
     def periodico(self) -> bool:
-        return self.intervalo_chequeo > 0
+        return self.intervalo_chequeo > 0 or self.chequeo_por_foto
+
+    def usar_chequeo_por_foto(self, activo: bool) -> None:
+        """Con la Blink, chequear al llegar cada foto en vez de por intervalo."""
+        with self._lock:
+            self.chequeo_por_foto = bool(activo)
+            self._proxima_foto = None
+            self._foto_pendiente = False
+            self._ciclo_desde = None
+            self._proximo_chequeo = 0.0
+
+    @property
+    def confirmaciones_requeridas(self) -> int:
+        """Con la Blink el modelo mira siempre la MISMA foto fija: preguntarle
+        dos veces da la misma respuesta y duplica la espera (~30 s por consulta
+        en CPU). Con una foto alcanza una confirmación."""
+        return 1 if self.chequeo_por_foto else self.confirmaciones_necesarias
+
+    def foto_nueva(self, proxima: float | None) -> None:
+        """Llegó una foto nueva: se chequea ya. `proxima` = cuándo se espera la siguiente."""
+        with self._lock:
+            self._proxima_foto = proxima
+            if self._ciclo_desde is not None:
+                # Hay un chequeo en curso (el modelo puede tardar ~30 s): no se
+                # corta, porque su resultado se perdería. La foto nueva se
+                # chequea apenas termine.
+                self._foto_pendiente = True
+                return
+            self.confirmaciones = 0
+            self._proximo_chequeo = 0.0
 
     def _abrir_ciclo(self, ahora: float, gris: np.ndarray) -> None:
         self._conf_max_ciclo = 0.0
@@ -267,7 +312,14 @@ class DetectorHibrido:
         if not self.periodico or self._ciclo_desde is None:
             return
         self._ciclo_desde = None
-        self._proximo_chequeo = ahora + self.intervalo_chequeo
+        # Con la Blink el próximo chequeo es la próxima foto (foto_nueva).
+        if self.chequeo_por_foto:
+            # La próxima foto abre el chequeo siguiente; si ya llegó mientras
+            # este corría, arranca enseguida.
+            self._proximo_chequeo = 0.0 if self._foto_pendiente else float("inf")
+            self._foto_pendiente = False
+        else:
+            self._proximo_chequeo = ahora + self.intervalo_chequeo
         self._resultado_chequeo = resultado
         if self.frame_anterior is not None:
             self._gris_conclusion = self.frame_anterior.copy()
@@ -285,6 +337,8 @@ class DetectorHibrido:
             self._ciclo_desde = None
             self._proximo_chequeo = 0.0
             if olvidar_veredicto:
+                # Otra pregunta: la imagen actual sí merece una consulta nueva.
+                self._huella_consultada = None
                 self.ultima_alarma = float("-inf")
                 self._ultimo_veredicto = None
                 self._resultado_chequeo = ""
@@ -296,6 +350,10 @@ class DetectorHibrido:
         no hay chequeo periódico."""
         if not self.periodico or self._ciclo_desde is not None:
             return -1.0
+        if self.chequeo_por_foto and self._proximo_chequeo == float("inf"):
+            if self._proxima_foto is None:
+                return -1.0
+            return max(0.0, self._proxima_foto - ahora)
         return max(0.0, self._proximo_chequeo - ahora)
 
     # ------------------------------------------------------------ pre-proceso
@@ -394,7 +452,19 @@ class DetectorHibrido:
             self.usa_modelo
             and not self.inferencia_activa
             and ahora - self.ultima_inferencia >= self.seg_entre_inferencias
+            and self._huella_actual != self._huella_consultada
         )
+
+    def _pedir_inferencia(self) -> None:
+        """Levanta el pedido y marca esta imagen como ya consultada."""
+        self.pedido_inferencia = True
+        self._huella_consultada = self._huella_actual
+
+    @staticmethod
+    def _huella(frame: np.ndarray) -> int:
+        """Identifica la imagen: igual para la misma foto, distinta si cambia."""
+        chico = cv2.resize(frame, (64, 36), interpolation=cv2.INTER_AREA)
+        return zlib.crc32(chico.tobytes())
 
     def _puede_entrar_diario(self, ahora: float) -> bool:
         """
@@ -450,7 +520,7 @@ class DetectorHibrido:
                 self.confirmaciones = max(0, self.confirmaciones - 1)
 
             ahora = time.time()
-            if self.confirmaciones >= self.confirmaciones_necesarias:
+            if self.confirmaciones >= self.confirmaciones_requeridas:
                 if self._puede_entrar_diario(ahora):
                     self.ultima_alarma = ahora
                     self.estado = Estado.DIARIO
@@ -463,7 +533,7 @@ class DetectorHibrido:
                 # Con una duda razonable (alguna consulta llegó a la mitad del
                 # umbral) no se absorbe al fondo: se vuelve a verificar.
                 self._duda_descartado = self._conf_max_ciclo >= 0.5 * self.motor.umbral
-                if self._inferencias_ciclo >= self.confirmaciones_necesarias:
+                if self._inferencias_ciclo >= self.confirmaciones_requeridas:
                     self._cerrar_ciclo(
                         ahora, f"Hay algo en la zona, pero no es {self.nombre}."
                     )
@@ -473,6 +543,7 @@ class DetectorHibrido:
         # Corre en un hilo del pool (server.py: asyncio.to_thread). Todo lo
         # que toca estado compartido con resolver_inferencia() va bajo lock.
         with self._lock:
+            self._huella_actual = self._huella(frame)
             if self.modo_continuo:
                 res = self._procesar_continuo(frame)
             else:
@@ -490,16 +561,22 @@ class DetectorHibrido:
 
     # ------------------------------------------------------------ modo prueba
     def _procesar_continuo(self, frame: np.ndarray) -> Resultado:
-        """Analiza todo el tiempo, sin esperar movimiento. Sirve para calibrar."""
+        """Sin intervalo ni espera de quietud, para calibrar. Igual respeta la
+        cadena: al modelo solo se le pregunta si el color vio un cambio, y una
+        sola vez por imagen."""
         ahora = time.time()
 
-        if self.color.calibrado:
-            self._ultimo_color = self.color.analizar(frame)
-        else:
+        if not self.color.calibrado:
             self.color.alimentar_calibracion(frame)
+            return self._armar(self.estado, "[prueba] calibrando la zona vacía…", 0.0)
+
+        self._ultimo_color = self.color.analizar(frame)
+        if not self._ultimo_color.hay_cambio:
+            return self._armar(
+                Estado.VIGILANDO, "[prueba] sin cambios en la zona: no consulto al modelo", 0.0)
 
         if self._listo_para_inferir(ahora):
-            self.pedido_inferencia = True
+            self._pedir_inferencia()
 
         if self.inferencia_activa:
             msg = f"[prueba] analizando… (última conf {self._conf_ultima:.2f})"
@@ -536,12 +613,14 @@ class DetectorHibrido:
                 # para que el próximo chequeo pueda medir movimiento.
                 self.frame_anterior = gris.copy()
                 if ahora < self._proximo_chequeo:
-                    falta = self._proximo_chequeo - ahora
+                    falta = self.segundos_para_chequeo(ahora)
+                    if self.chequeo_por_foto:
+                        cuando = ("esperando la foto nueva de la Blink…" if falta <= 0.5
+                                  else f"Próximo chequeo en {falta:.0f}s (foto nueva de la Blink).")
+                    else:
+                        cuando = f"Próximo chequeo en {falta:.0f}s."
                     return self._armar(
-                        self.estado,
-                        f"{self._resultado_chequeo} Próximo chequeo en {falta:.0f}s."
-                        .strip(),
-                        0.0,
+                        self.estado, f"{self._resultado_chequeo} {cuando}".strip(), 0.0,
                     )
                 self._abrir_ciclo(ahora, gris)
             elif (ahora - self._ciclo_desde > self.max_seg_chequeo
@@ -671,17 +750,21 @@ class DetectorHibrido:
 
         # --- [3] pedimos inferencia (la corre el server en otro hilo) ---
         if self._listo_para_inferir(ahora):
-            self.pedido_inferencia = True
+            self._pedir_inferencia()
 
         if self.estado != Estado.DESCARTADO:
             self.estado = Estado.VERIFICANDO
 
         if self.inferencia_activa:
             msg = "Objeto nuevo — preguntándole al modelo…"
+        elif self._huella_actual == self._huella_consultada:
+            # Esta imagen ya se consultó (o la consulta falló): se espera la siguiente.
+            msg = ((f"{self._ultimo_veredicto.explicacion} — " if self._ultimo_veredicto else "")
+                   + "esperando una imagen nueva para volver a consultar")
         elif self._ultimo_veredicto is not None:
             msg = (f"{self._ultimo_veredicto.explicacion} — "
                    f"confirmaciones {self.confirmaciones}/"
-                   f"{self.confirmaciones_necesarias}")
+                   f"{self.confirmaciones_requeridas}")
         else:
             msg = "Objeto nuevo — esperando al modelo"
 

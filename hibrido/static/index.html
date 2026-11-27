@@ -15,7 +15,7 @@
     background: var(--bg); color: var(--texto); min-height: 100vh; padding: 20px;
     font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
-  .wrap { max-width: 1150px; margin: 0 auto; }
+  .wrap { max-width: 1280px; margin: 0 auto; }
   header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
   h1 { font-size: 20px; font-weight: 600; }
   .pill {
@@ -28,8 +28,24 @@
   .pill.verificando  { background: #1c2c44; color: var(--acento); }
   .pill.descartado   { background: #2b2f36; color: var(--suave); }
   .pill.diario       { background: #3d1416; color: var(--alarma); }
-  .grid { display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  .pill.pausada      { background: #33280a; color: var(--warn); }
+  button.vigilancia  { width: auto; margin: 0 0 0 auto; padding: 7px 16px; }
+  button.vigilancia.reanudar { background: var(--ok); border-color: var(--ok); color: #06140a; }
+  .grid { display: grid; grid-template-columns: 1fr 320px; gap: 18px; align-items: start; }
   @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  aside { position: sticky; top: 12px; }
+  @media (max-width: 900px) { aside { position: static; } }
+  .seccion { font-size: 13px; font-weight: 600; color: var(--suave); margin: 18px 0 10px;
+             text-transform: uppercase; letter-spacing: .06em; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+          gap: 14px; align-items: start; }
+  .cols .panel { margin-bottom: 0; }
+  .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }
+  details { margin-top: 14px; }
+  summary { cursor: pointer; padding: 10px 14px; border: 1px solid var(--borde);
+            border-radius: 10px; background: var(--panel); font-weight: 600; font-size: 14px; }
+  summary span { font-weight: 400; color: var(--suave); font-size: 12px; margin-left: 6px; }
+  details[open] summary { margin-bottom: 14px; }
 
   .video-box {
     position: relative; background: #000; border-radius: 10px; overflow: hidden;
@@ -119,6 +135,9 @@
     <h1>Alarma de Diario</h1>
     <span class="pill" id="pill">conectando…</span>
     <span class="msg" id="modo-actual" style="margin:0"></span>
+    <button id="btn-vigilancia" class="vigilancia" onclick="alternarVigilancia()">
+      ⏸ Pausar vigilancia
+    </button>
   </header>
 
   <div class="banner" id="banner">
@@ -140,31 +159,31 @@
         <i style="background:#3fb950"></i>lo que el modelo reconoció como el objeto buscado &nbsp;
         <i style="background:#d29922"></i>detección débil del modelo
       </p>
-    </div>
 
-    <aside>
+      <h3 class="seccion">Configuración</h3>
+      <div class="cols">
       <div class="panel">
-        <h2>Los dos validadores</h2>
+        <h2>Cámara</h2>
+        <p class="msg" id="cam-actual">—</p>
+        <select id="cam-tipo">
+          <option value="local">Cámara de la notebook</option>
+          <option value="blink">Blink</option>
+        </select>
+        <button class="primario" onclick="cambiarCamara()">Usar esta cámara</button>
+        <p class="msg" id="msg-cam">
+          La Blink manda una foto por minuto (no es video). Cada cámara recuerda su zona.
+        </p>
+      </div>
 
-        <div class="val no" id="val-color">
-          <span class="luz"></span>
-          <span class="txt">
-            <span class="tit c1">1 · ¿Cambió algo en la zona?</span><br>
-            <span class="sub" id="sub-color">esperando…</span>
-          </span>
-          <span class="voto" id="voto-color">—</span>
-        </div>
-
-        <div class="val no" id="val-modelo">
-          <span class="luz"></span>
-          <span class="txt">
-            <span class="tit c2">2 · <span id="tit-motor">modelo</span> · ¿es <span id="tit-objeto">el objeto</span>?</span><br>
-            <span class="sub" id="sub-modelo">esperando…</span>
-          </span>
-          <span class="voto" id="voto-modelo">—</span>
-        </div>
-
-        <p class="veredicto" id="veredicto">—</p>
+      <div class="panel">
+        <h2>Zona a vigilar</h2>
+        <button id="btn-roi" onclick="toggleRoi()">Dibujar zona</button>
+        <button onclick="limpiarRoi()">Usar toda la imagen</button>
+        <button onclick="recalibrar()">Recalibrar zona vacía</button>
+        <p class="msg" id="msg-roi">
+          Marcá las 4 esquinas de la hoja (o de la zona). Recalibrá con la zona
+          vacía cada vez que muevas la cámara o cambie mucho la luz.
+        </p>
       </div>
 
       <div class="panel" style="border-color:#2d6b3f">
@@ -176,16 +195,22 @@
 a newspaper
 a folded newspaper</textarea>
         <button class="primario" onclick="guardarObjetivo()">Cambiar objetivo</button>
-        <button onclick="preset('birome')">Preset birome</button>
-        <button onclick="preset('lapiz')">Preset lápiz</button>
-        <button onclick="preset('diario')">Preset diario</button>
-        <button onclick="preset('anteojos')">Preset anteojos</button>
+        <div class="presets">
+          <button onclick="preset('birome')">Birome</button>
+          <button onclick="preset('lapiz')">Lápiz</button>
+          <button onclick="preset('diario')">Diario</button>
+          <button onclick="preset('anteojos')">Anteojos</button>
+        </div>
         <p class="msg" id="msg-obj">
           En inglés: el modelo entiende mucho peor el español. Al cambiarlo se
           hace un chequeo enseguida.
         </p>
       </div>
+      </div>
 
+      <details id="ajustes-finos">
+        <summary>Ajustes finos <span>combinación, frecuencia, umbrales y velocidad</span></summary>
+        <div class="cols">
       <div class="panel">
         <h2>Cómo se combinan</h2>
         <select id="fusion" onchange="cambiarFusion()">
@@ -203,30 +228,6 @@ a folded newspaper</textarea>
       </div>
 
       <div class="panel">
-        <h2>Medidas en vivo</h2>
-        <div class="fila"><span>Movimiento</span><span id="v-mov">—</span></div>
-        <div class="fila"><span>Zona cambiada</span><span id="v-fondo">—</span></div>
-        <div class="fila"><span>ΔE de color</span><span id="v-delta">—</span></div>
-        <div class="fila"><span>¿Parece papel?</span><span id="v-papel">—</span></div>
-        <div class="fila"><span>Confianza modelo</span><span id="v-conf">—</span></div>
-        <div class="fila"><span>Score final</span><span id="v-score">—</span></div>
-        <div class="fila"><span>Confirmaciones</span><span id="v-confirm">—</span></div>
-        <div class="fila"><span>Modelo</span><span id="v-infer">en espera</span></div>
-        <div class="fila"><span>Próximo chequeo</span><span id="v-prox">—</span></div>
-      </div>
-
-      <div class="panel">
-        <h2>Zona a vigilar</h2>
-        <button id="btn-roi" onclick="toggleRoi()">Dibujar zona</button>
-        <button onclick="limpiarRoi()">Usar toda la imagen</button>
-        <button onclick="recalibrar()">Recalibrar zona vacía</button>
-        <p class="msg" id="msg-roi">
-          Marcá las 4 esquinas de la hoja (o de la zona). Recalibrá con la zona
-          vacía cada vez que muevas la cámara o cambie mucho la luz.
-        </p>
-      </div>
-
-      <div class="panel">
         <h2>Frecuencia de chequeo</h2>
         <label>Chequear cada <span class="valor" id="l-int">30 s</span></label>
         <input type="range" id="s-int" min="0" max="120" step="5" value="30">
@@ -234,6 +235,28 @@ a folded newspaper</textarea>
         <p class="msg" id="msg-int">
           En cada chequeo se compara la zona contra cómo estaba vacía; si cambió,
           se le pregunta al modelo. En 0 se chequea sin pausa, todo el tiempo.
+        </p>
+        <p class="msg" style="margin-top:4px">
+          Con la Blink esto no se usa: se chequea cada vez que llega una foto
+          nueva (una por minuto).
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>Velocidad del modelo</h2>
+        <label>Resolución de entrada</label>
+        <select id="res" onchange="cambiarRes()">
+          <option value="960">960 — máxima precisión, muy lenta</option>
+          <option value="768">768 — precisa, lenta</option>
+          <option value="640" selected>640 — equilibrada</option>
+          <option value="480">480 — rápida</option>
+          <option value="320">320 — muy rápida, menos confiable</option>
+        </select>
+        <p class="msg">
+          El tiempo escala con el cuadrado de la resolución. Como el validador de
+          color le pasa al modelo solo el recorte del objeto, 640 suele alcanzar.
+          Cambia sola con la cámara (notebook 320, Blink 640); lo que elijas acá
+          queda guardado para la cámara que estás usando.
         </p>
       </div>
 
@@ -271,21 +294,46 @@ a folded newspaper</textarea>
         <input type="range" id="s-est" min="1" max="15" step="1" value="3">
         <button class="primario" onclick="guardarAjustes()">Aplicar</button>
       </div>
+        </div>
+      </details>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h2>Los dos validadores</h2>
+
+        <div class="val no" id="val-color">
+          <span class="luz"></span>
+          <span class="txt">
+            <span class="tit c1">1 · ¿Cambió algo en la zona?</span><br>
+            <span class="sub" id="sub-color">esperando…</span>
+          </span>
+          <span class="voto" id="voto-color">—</span>
+        </div>
+
+        <div class="val no" id="val-modelo">
+          <span class="luz"></span>
+          <span class="txt">
+            <span class="tit c2">2 · <span id="tit-motor">modelo</span> · ¿es <span id="tit-objeto">el objeto</span>?</span><br>
+            <span class="sub" id="sub-modelo">esperando…</span>
+          </span>
+          <span class="voto" id="voto-modelo">—</span>
+        </div>
+
+        <p class="veredicto" id="veredicto">—</p>
+      </div>
 
       <div class="panel">
-        <h2>Velocidad del modelo</h2>
-        <label>Resolución de entrada</label>
-        <select id="res" onchange="cambiarRes()">
-          <option value="960">960 — máxima precisión, muy lenta</option>
-          <option value="768">768 — precisa, lenta</option>
-          <option value="640" selected>640 — equilibrada</option>
-          <option value="480">480 — rápida</option>
-          <option value="320">320 — muy rápida, menos confiable</option>
-        </select>
-        <p class="msg">
-          El tiempo escala con el cuadrado de la resolución. Como el validador de
-          color le pasa al modelo solo el recorte del objeto, 640 suele alcanzar.
-        </p>
+        <h2>Medidas en vivo</h2>
+        <div class="fila"><span>Movimiento</span><span id="v-mov">—</span></div>
+        <div class="fila"><span>Zona cambiada</span><span id="v-fondo">—</span></div>
+        <div class="fila"><span>ΔE de color</span><span id="v-delta">—</span></div>
+        <div class="fila"><span>¿Parece papel?</span><span id="v-papel">—</span></div>
+        <div class="fila"><span>Confianza modelo</span><span id="v-conf">—</span></div>
+        <div class="fila"><span>Score final</span><span id="v-score">—</span></div>
+        <div class="fila"><span>Confirmaciones</span><span id="v-confirm">—</span></div>
+        <div class="fila"><span>Modelo</span><span id="v-infer">en espera</span></div>
+        <div class="fila"><span>Próximo chequeo</span><span id="v-prox">—</span></div>
       </div>
 
       <div class="panel" style="border-color:#2d4a6b">
@@ -305,6 +353,11 @@ a folded newspaper</textarea>
         <label style="display:flex;align-items:center;gap:8px;margin:0">
           <input type="checkbox" id="sonido" checked style="width:auto"> Sonido al detectar
         </label>
+        <label style="display:flex;align-items:center;gap:8px;margin:10px 0 0">
+          <input type="checkbox" id="telegram" style="width:auto" onchange="cambiarTelegram()"> Avisar por Telegram
+        </label>
+        <p class="msg" id="msg-telegram" style="margin:6px 0 8px"></p>
+        <button id="btn-prueba-telegram" onclick="probarTelegram()">Mandar mensaje de prueba</button>
       </div>
     </aside>
   </div>
@@ -312,19 +365,78 @@ a folded newspaper</textarea>
 
 <script>
 const $ = id => document.getElementById(id);
+try {
+  if (localStorage.getItem('ajustes-finos') === 'abierto') $('ajustes-finos').open = true;
+  $('ajustes-finos').addEventListener('toggle', e => {
+    try { localStorage.setItem('ajustes-finos', e.target.open ? 'abierto' : 'cerrado'); } catch (_) {}
+  });
+} catch (_) {}
 let ws, modoRoi = false, puntosRoi = [], cajas = [], umbralActual = 0.37;
 let intervaloActual = 30;
 
 // ---------------------------------------------------------------- WebSocket
 function conectar() {
-  ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => setPill('vigilando', 'conectado');
+  // wss detrás de HTTPS (Caddy): el navegador bloquea ws:// en una página segura.
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  ws.onopen = () => { if (vigilanciaActiva) setPill('vigilando', 'conectado'); };
   ws.onclose = () => { setPill('', 'desconectado'); setTimeout(conectar, 2000); };
   ws.onmessage = e => manejar(JSON.parse(e.data));
 }
 
+// ---------------------------------------------------------- pausar/reanudar
+let vigilanciaActiva = true;
+function pintarVigilancia(activa) {
+  vigilanciaActiva = activa;
+  const b = $('btn-vigilancia');
+  b.textContent = activa ? '⏸ Pausar vigilancia' : '▶ Reanudar vigilancia';
+  b.classList.toggle('reanudar', !activa);
+  if (!activa) {
+    setPill('pausada', 'en pausa');
+    $('msg').textContent = 'Vigilancia en pausa: no se analiza ni se avisa' +
+      (camaraActual.tipo === 'blink' ? ', y no se le piden fotos a la Blink.' : '.');
+  } else {
+    $('msg').textContent = 'Vigilancia reanudada: chequeando…';
+  }
+}
+async function alternarVigilancia() {
+  const r = await fetch('/api/vigilancia', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({activa: !vigilanciaActiva})
+  }).then(r => r.json());
+  pintarVigilancia(r.activa);
+}
+fetch('/api/vigilancia').then(r => r.json()).then(r => { if (!r.activa) pintarVigilancia(false); });
+
+// ------------------------------------------------------------------ Telegram
+function pintarTelegram(t) {
+  $('telegram').checked = t.activo;
+  $('btn-prueba-telegram').disabled = !!t.falta;
+  $('msg-telegram').textContent = t.falta
+    ? `No se puede avisar: ${t.falta}.`
+    : t.activo
+      ? `Cuando suene la alarma manda la foto al grupo (${t.via}). Como mucho un aviso cada ${Math.round(t.espera_s)} s.`
+      : 'Apagado: la alarma suena solo acá.';
+}
+async function cambiarTelegram() {
+  const t = await fetch('/api/telegram', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({activo: $('telegram').checked})
+  }).then(r => r.json());
+  pintarTelegram(t);
+}
+async function probarTelegram() {
+  const b = $('btn-prueba-telegram');
+  b.disabled = true;
+  $('msg-telegram').textContent = 'Mandando…';
+  const r = await fetch('/api/telegram/prueba', {method: 'POST'}).then(r => r.json());
+  $('msg-telegram').textContent = r.ok ? '✅ Llegó: revisá el grupo de Telegram.' : `❌ ${r.error}`;
+  b.disabled = false;
+}
+fetch('/api/telegram').then(r => r.json()).then(pintarTelegram);
+
 function manejar(d) {
   if (d.tipo !== 'frame') return;
+  if (!vigilanciaActiva) return;   // un cuadro que llegó justo al pausar
   $('placeholder').style.display = 'none';
   $('video').src = 'data:image/jpeg;base64,' + d.imagen;
 
@@ -498,6 +610,46 @@ async function recalibrar() {
   await fetch('/api/recalibrar', {method: 'POST'});
   $('msg-roi').textContent = 'Recalibrando… dejá la zona vacía unos segundos.';
 }
+
+// ------------------------------------------------------------------- cámara
+// Solo dos opciones: la webcam de la notebook y la Blink de config.json.
+async function cambiarCamara() {
+  const tipo = $('cam-tipo').value;
+  if (tipo === camaraActual.tipo) { $('msg-cam').textContent = 'Ya estás usando esa cámara.'; return; }
+  const datos = {tipo};
+  $('msg-cam').textContent = tipo === 'blink'
+    ? 'Pidiendo la primera foto a la Blink (tarda unos 15 s)…'
+    : 'Abriendo la cámara…';
+  const r = await fetch('/api/camara', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(datos)
+  }).then(r => r.json());
+  if (!r.ok) { $('msg-cam').textContent = 'No se pudo: ' + r.error + ' (sigue la anterior)'; return; }
+  pintarCamara(r.camara);
+  if (r.resolucion) $('res').value = String(r.resolucion);
+  puntosRoi = (r.roi && r.roi.activa) ? r.roi.puntos : [];
+  dibujar();
+  $('msg-cam').textContent = puntosRoi.length
+    ? 'Listo. Se recuperó la zona que tenía esta cámara.'
+    : 'Listo. Marcá la zona a vigilar para esta cámara.';
+}
+
+let camaraActual = {};
+function pintarCamara(c) {
+  camaraActual = c;
+  $('cam-actual').textContent = 'Usando: ' + c.texto;
+  for (const o of $('cam-tipo').options)
+    if (c.opciones && c.opciones[o.value]) o.textContent = c.opciones[o.value];
+  $('cam-tipo').value = c.tipo;
+}
+fetch('/api/camara').then(r => r.json()).then(r => {
+  pintarCamara(r.actual);
+  if (!r.blink_configurada) {
+    $('cam-tipo').querySelector('option[value=blink]').disabled = true;
+    $('msg-cam').textContent = 'La Blink no está configurada en este equipo ' +
+      '(python hibrido/camara_blink.py --login).';
+  }
+});
 
 // ------------------------------------------------------------------- fusión
 async function cambiarFusion() {

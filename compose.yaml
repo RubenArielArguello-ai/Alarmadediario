@@ -6,13 +6,20 @@ services:
       dockerfile: Dockerfile
     command: ["python", "server.py", "--host", "0.0.0.0"]
     ports:
-      - "127.0.0.1:${WEB_PORT:-8000}:8000"
+      # ALARMA_IP: dónde escucha el dashboard. Por defecto solo en la propia
+      # máquina; en la VM .104 es su IP de Tailscale, para que Caddy (droplet)
+      # lo publique con login. Nunca 0.0.0.0: el dashboard no tiene login propio.
+      - "${ALARMA_IP:-127.0.0.1}:${WEB_PORT:-8000}:8000"
     restart: unless-stopped
+    # Claves (ANTHROPIC_API_KEY, N8N_WEBHOOK_URL, TELEGRAM_*): se leen al
+    # arrancar, no quedan dentro de la imagen.
+    env_file:
+      - ./hibrido/.env
     volumes:
       - ./hibrido/config.json:/app/hibrido/config.json
       - ./hibrido/capturas:/app/hibrido/capturas
-      - owlv2-modelos:/app/hibrido/modelos
-      - yolo-modelos:/app/hibrido/modelos_yolo
+      # Sesión de la cuenta Blink (python hibrido/camara_blink.py --login).
+      - ./hibrido/.blink_sesion.json:/app/hibrido/.blink_sesion.json
 
   hibrido-prueba:
     image: alarmadediario-hibrido
@@ -20,7 +27,3 @@ services:
     command: ["python", "server.py", "--modo-prueba", "--host", "0.0.0.0"]
     volumes:
       - ./hibrido/config.json:/app/hibrido/config.json:ro
-
-volumes:
-  owlv2-modelos:
-  yolo-modelos:
