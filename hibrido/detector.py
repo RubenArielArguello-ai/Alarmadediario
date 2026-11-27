@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import threading
 import time
+import zlib
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -134,6 +135,13 @@ class DetectorHibrido:
         # resolver_inferencia(). Así el video nunca se congela.
         self.pedido_inferencia = False
         self.inferencia_activa = False
+        # Huella de la imagen actual y de la última que se le mandó al modelo.
+        # Una misma imagen se consulta UNA sola vez: la Blink entrega la misma
+        # foto durante un minuto, y preguntar de nuevo da la misma respuesta
+        # (y con Claude, cada consulta cuesta). Tampoco se reintenta tras un
+        # error: se espera a la imagen siguiente.
+        self._huella_actual: int | None = None
+        self._huella_consultada: int | None = None
 
         # --- modo prueba: analiza siempre, sin esperar movimiento ---
         self.modo_continuo = False
@@ -329,6 +337,8 @@ class DetectorHibrido:
             self._ciclo_desde = None
             self._proximo_chequeo = 0.0
             if olvidar_veredicto:
+                # Otra pregunta: la imagen actual sí merece una consulta nueva.
+                self._huella_consultada = None
                 self.ultima_alarma = float("-inf")
                 self._ultimo_veredicto = None
                 self._resultado_chequeo = ""
@@ -442,7 +452,19 @@ class DetectorHibrido:
             self.usa_modelo
             and not self.inferencia_activa
             and ahora - self.ultima_inferencia >= self.seg_entre_inferencias
+            and self._huella_actual != self._huella_consultada
         )
+
+    def _pedir_inferencia(self) -> None:
+        """Levanta el pedido y marca esta imagen como ya consultada."""
+        self.pedido_inferencia = True
+        self._huella_consultada = self._huella_actual
+
+    @staticmethod
+    def _huella(frame: np.ndarray) -> int:
+        """Identifica la imagen: igual para la misma foto, distinta si cambia."""
+        chico = cv2.resize(frame, (64, 36), interpolation=cv2.INTER_AREA)
+        return zlib.crc32(chico.tobytes())
 
     def _puede_entrar_diario(self, ahora: float) -> bool:
         """
@@ -521,6 +543,7 @@ class DetectorHibrido:
         # Corre en un hilo del pool (server.py: asyncio.to_thread). Todo lo
         # que toca estado compartido con resolver_inferencia() va bajo lock.
         with self._lock:
+            self._huella_actual = self._huella(frame)
             if self.modo_continuo:
                 res = self._procesar_continuo(frame)
             else:
@@ -538,16 +561,22 @@ class DetectorHibrido:
 
     # ------------------------------------------------------------ modo prueba
     def _procesar_continuo(self, frame: np.ndarray) -> Resultado:
-        """Analiza todo el tiempo, sin esperar movimiento. Sirve para calibrar."""
+        """Sin intervalo ni espera de quietud, para calibrar. Igual respeta la
+        cadena: al modelo solo se le pregunta si el color vio un cambio, y una
+        sola vez por imagen."""
         ahora = time.time()
 
-        if self.color.calibrado:
-            self._ultimo_color = self.color.analizar(frame)
-        else:
+        if not self.color.calibrado:
             self.color.alimentar_calibracion(frame)
+            return self._armar(self.estado, "[prueba] calibrando la zona vacía…", 0.0)
+
+        self._ultimo_color = self.color.analizar(frame)
+        if not self._ultimo_color.hay_cambio:
+            return self._armar(
+                Estado.VIGILANDO, "[prueba] sin cambios en la zona: no consulto al modelo", 0.0)
 
         if self._listo_para_inferir(ahora):
-            self.pedido_inferencia = True
+            self._pedir_inferencia()
 
         if self.inferencia_activa:
             msg = f"[prueba] analizando… (última conf {self._conf_ultima:.2f})"
@@ -721,13 +750,17 @@ class DetectorHibrido:
 
         # --- [3] pedimos inferencia (la corre el server en otro hilo) ---
         if self._listo_para_inferir(ahora):
-            self.pedido_inferencia = True
+            self._pedir_inferencia()
 
         if self.estado != Estado.DESCARTADO:
             self.estado = Estado.VERIFICANDO
 
         if self.inferencia_activa:
             msg = "Objeto nuevo — preguntándole al modelo…"
+        elif self._huella_actual == self._huella_consultada:
+            # Esta imagen ya se consultó (o la consulta falló): se espera la siguiente.
+            msg = ((f"{self._ultimo_veredicto.explicacion} — " if self._ultimo_veredicto else "")
+                   + "esperando una imagen nueva para volver a consultar")
         elif self._ultimo_veredicto is not None:
             msg = (f"{self._ultimo_veredicto.explicacion} — "
                    f"confirmaciones {self.confirmaciones}/"
