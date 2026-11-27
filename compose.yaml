@@ -6,7 +6,10 @@ services:
       dockerfile: Dockerfile
     command: ["python", "server.py", "--host", "0.0.0.0"]
     ports:
-      - "127.0.0.1:${WEB_PORT:-8000}:8000"
+      # ALARMA_IP: dónde escucha el dashboard. Por defecto solo en la propia
+      # máquina; en la VM .104 es su IP de Tailscale, para que Caddy (droplet)
+      # lo publique con login. Nunca 0.0.0.0: el dashboard no tiene login propio.
+      - "${ALARMA_IP:-127.0.0.1}:${WEB_PORT:-8000}:8000"
     restart: unless-stopped
     # Claves (ANTHROPIC_API_KEY, N8N_WEBHOOK_URL, TELEGRAM_*): se leen al
     # arrancar, no quedan dentro de la imagen.
